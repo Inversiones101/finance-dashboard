@@ -1,0 +1,1 @@
+ALTER TABLE "products" ADD COLUMN "list_price_cents" bigint;

@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790107417396,
+      "tag": "0000_purple_mercury",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790127507420,
+      "tag": "0001_miembros_privacidad_pnl",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790127529026,
+      "tag": "0002_precio_lista",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790127529395,
+      "tag": "0003_datos_existentes",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790130734654,
+      "tag": "0004_planeacion_perfil",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790130752475,
+      "tag": "0005_rol_y_cargo",
+      "breakpoints": true
+    }
+  ]
+}

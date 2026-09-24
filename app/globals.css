@@ -1,0 +1,203 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * ─── PALETA DE MARCA ────────────────────────────────────────────────────────
+ * Único lugar donde viven los hex. Para cambiar la paleta, edita solo este bloque.
+ * Blanco.pdf → modo claro · Oscuro.pdf → modo oscuro.
+ * Los tokens marcados "derivado" no están en los PDFs (estados de error/alerta, blanco de cards).
+ */
+:root {
+  /* Blanco */
+  --brand-cream: #f5f5ef;
+  --brand-cream-2: #f4f5ee;
+  --brand-green: #227634;
+  --brand-ink: #0d1c1a;
+  --brand-forest: #003028;
+  /* Oscuro */
+  --brand-leaf: #5b9123;
+  --brand-night: #051617;
+  --brand-olive-deep: #1f2615;
+  --brand-lime: #a5e20d;
+  --brand-olive: #3c5219;
+  --brand-pine: #004131;
+  --brand-abyss: #002c26;
+  --brand-emerald: #0a6b31;
+  /* Derivados */
+  --brand-paper: #fdfdf9;
+  --brand-coral: #e0533d;
+  --brand-amber: #e8a317;
+}
+
+/*
+ * ─── TOKENS SEMÁNTICOS ──────────────────────────────────────────────────────
+ * Los componentes solo usan estos nombres (bg-surface, text-primary…), nunca hex.
+ */
+:root {
+  --background: var(--brand-cream);
+  --surface: var(--brand-paper);
+  --surface-2: var(--brand-cream-2);
+  --foreground: var(--brand-ink);
+  --muted-foreground: color-mix(in oklab, var(--brand-ink) 58%, var(--brand-cream));
+  --primary: var(--brand-green);
+  --primary-foreground: var(--brand-cream);
+  --accent: var(--brand-lime);
+  --accent-foreground: var(--brand-ink);
+  --highlight: var(--brand-forest);
+  --highlight-foreground: var(--brand-cream);
+  --border: color-mix(in oklab, var(--brand-ink) 10%, transparent);
+  --success: var(--brand-green);
+  --warning: var(--brand-amber);
+  --danger: var(--brand-coral);
+
+  --chart-1: var(--brand-green);
+  --chart-2: var(--brand-forest);
+  --chart-3: var(--brand-leaf);
+  --chart-4: var(--brand-lime);
+  --chart-5: var(--brand-olive);
+  /* Semántica del dinero, igual en toda la app (validada para daltonismo).
+     Facturación bruta = verde claro · Ingreso neto = verde · Gasto = rojo (con textura en gráficos). */
+  --money-gross: #6fb57c;
+  --money-net: #1f6e30;
+  --money-out: #e8735c;
+  --money-out-text: #c2412d;
+
+  --shadow-card: 0 1px 2px rgb(13 28 26 / 0.04), 0 4px 16px -4px rgb(13 28 26 / 0.08);
+  --radius: 0.875rem;
+}
+
+.dark {
+  --background: var(--brand-night);
+  --surface: color-mix(in oklab, var(--brand-abyss) 70%, var(--brand-night));
+  --surface-2: var(--brand-abyss);
+  --foreground: var(--brand-cream);
+  --muted-foreground: color-mix(in oklab, var(--brand-cream) 60%, var(--brand-night));
+  --primary: var(--brand-lime);
+  --primary-foreground: var(--brand-night);
+  --accent: var(--brand-lime);
+  --accent-foreground: var(--brand-night);
+  --highlight: var(--brand-pine);
+  --highlight-foreground: var(--brand-cream);
+  --border: color-mix(in oklab, var(--brand-cream) 9%, transparent);
+  --success: var(--brand-lime);
+  --warning: #f2b93b;
+  --danger: #f07a63;
+
+  --chart-1: var(--brand-lime);
+  --chart-2: var(--brand-leaf);
+  --chart-3: var(--brand-emerald);
+  --chart-4: var(--brand-olive);
+  --chart-5: var(--brand-pine);
+  --money-gross: #3f7a2a;
+  --money-net: #93c40c;
+  --money-out: #d95a45;
+  --money-out-text: #f08a73;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -8px rgb(0 0 0 / 0.45);
+}
+
+/* Aliases que esperan los componentes de shadcn/ui. */
+:root,
+.dark {
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--surface-2);
+  --destructive: var(--danger);
+  --input: var(--border);
+  --ring: color-mix(in oklab, var(--primary) 55%, transparent);
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--surface-2);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-money-gross: var(--money-gross);
+  --color-money-net: var(--money-net);
+  --color-money-out: var(--money-out);
+  --color-money-out-text: var(--money-out-text);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-bricolage);
+  --shadow-card: var(--shadow-card);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-heading tracking-tight;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
