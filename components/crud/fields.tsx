@@ -35,6 +35,9 @@ export function TextField({
         id={base.name}
         name={base.name}
         type={type}
+        // Sin step, el navegador solo acepta enteros y rechaza porcentajes como 2.9.
+        step={type === "number" ? "any" : undefined}
+        inputMode={type === "number" ? "decimal" : undefined}
         defaultValue={defaultValue ?? undefined}
         placeholder={placeholder}
         required={base.required}
