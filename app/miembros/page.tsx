@@ -30,6 +30,7 @@ import { RowActions } from "@/components/crud/row-actions";
 import { StatusBadge } from "@/components/crud/status-badge";
 import { FieldRow, Hidden, MoneyField, SelectField, TextareaField, TextField } from "@/components/crud/fields";
 import { MrrForecast } from "@/components/dashboard/mrr-forecast";
+import { SkoolImportDialog } from "@/components/members/skool-import-dialog";
 import { cn } from "@/lib/utils";
 
 type Member = typeof s.members.$inferSelect;
@@ -98,6 +99,7 @@ export default async function MiembrosPage({ searchParams }: PageProps<"/miembro
         title="Miembros y MRR"
         description="Tu MRR sale de aquí: la suma de los planes activos. Da de baja a quien cancele (deja de contar al terminar su periodo pagado) y reactívalo si vuelve."
       >
+        {canWrite && <SkoolImportDialog />}
         {canWrite && (
           <FormDialog title="Nuevo miembro" action={saveMemberAction} wide trigger={<Button><UserPlus className="size-4" /> Nuevo miembro</Button>}>
             <MemberFields o={o} today={today} />
@@ -154,7 +156,7 @@ export default async function MiembrosPage({ searchParams }: PageProps<"/miembro
                         <TableRow key={x.id} className={cn(!counts(x) && "opacity-60")}>
                           <TableCell>
                             <p className="font-medium">{x.name}</p>
-                            <p className="text-xs text-muted-foreground">desde {formatDate(x.startedOn)}</p>
+                            <p className="text-xs text-muted-foreground">{x.email ? `${x.email} · ` : ""}desde {formatDate(x.startedOn)}</p>
                           </TableCell>
                           <TableCell>
                             <p>{productName.get(x.productId)}</p>

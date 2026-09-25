@@ -369,6 +369,8 @@ export const members = pgTable(
   {
     id: id(),
     name: text("name").notNull(),
+    /** Correo en Skool: llave para importar el CSV sin duplicar (el nombre es el respaldo). */
+    email: text("email"),
     productId: uuid("product_id").notNull().references(() => products.id),
     billingInterval: billingIntervalEnum("billing_interval").notNull(),
     currency: currencyEnum("currency").notNull().default("USD"),
@@ -381,7 +383,7 @@ export const members = pgTable(
     notes: text("notes"),
     ...timestamps,
   },
-  (t) => [index("members_status_idx").on(t.status)]
+  (t) => [index("members_status_idx").on(t.status), uniqueIndex("members_email_idx").on(t.email)]
 );
 
 // ─────────────────────────────────────────────────────────────────────────────

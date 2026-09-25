@@ -43,6 +43,13 @@
       "when": 1790130752475,
       "tag": "0005_rol_y_cargo",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790374772095,
+      "tag": "0006_miembros_email",
+      "breakpoints": true
     }
   ]
 }
