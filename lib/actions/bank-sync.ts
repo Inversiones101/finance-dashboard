@@ -1,8 +1,10 @@
 "use server";
 
 import { z } from "zod";
+import { eq } from "drizzle-orm";
+import * as s from "@/db/schema";
 import { mercuryClient } from "@/lib/mercury/client";
-import { acceptAllSuggestions, resolveInboxItem, syncBank } from "@/lib/services/bank-sync";
+import { acceptAllSuggestions, resolveInboxItem, syncBank, type Suggestion } from "@/lib/services/bank-sync";
 import { todayIn } from "@/lib/today";
 import { checkbox, mutate } from "./mutate";
 import { fail, parseForm, zId, zOptId, zOptText, type ActionResult } from "./result";
@@ -42,5 +44,17 @@ export async function acceptAllSuggestionsAction(): Promise<ActionResult> {
   return mutate("banking", "write", "bank_inbox", "accept_all", async (tx, userId) => {
     const r = await acceptAllSuggestions(tx, userId);
     return { message: `${r.ok} clasificadas${r.failed.length ? ` · ${r.failed.length} necesitan revisión: ${r.failed.join("; ")}` : ""}`, diff: r };
+  });
+}
+
+/** Acepta la sugerencia de una sola transacción (botón ✓ de la bandeja). */
+export async function acceptSuggestionAction(id: string): Promise<ActionResult> {
+  if (!zId.safeParse(id).success) return fail("Registro inválido");
+  return mutate("banking", "write", "bank_inbox", "resolve", async (tx, userId) => {
+    const [item] = await tx.select().from(s.bankInbox).where(eq(s.bankInbox.id, id));
+    const sug = item?.suggestion as Suggestion | null;
+    if (!sug) throw new Error("Esta transacción no tiene sugerencia; clasifícala a mano.");
+    await resolveInboxItem(tx, id, { as: sug.as, description: sug.description, categoryId: sug.categoryId, productId: sug.productId }, userId);
+    return { id, message: "Registrada" };
   });
 }
