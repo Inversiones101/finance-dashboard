@@ -13,6 +13,7 @@ export const WIDGETS = [
   { id: "goals", label: "Metas" },
   { id: "breakeven", label: "Punto de equilibrio" },
   { id: "movement", label: "Movimiento del MRR" },
+  { id: "weekly", label: "Resumen de la semana" },
 ] as const;
 
 export type WidgetId = (typeof WIDGETS)[number]["id"];

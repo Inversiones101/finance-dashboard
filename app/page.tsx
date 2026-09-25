@@ -27,6 +27,7 @@ import { BreakdownCard } from "@/components/dashboard/breakdown-card";
 import { CustomizeDashboard } from "@/components/dashboard/customize-dashboard";
 import { BudgetWidget, GoalsWidget } from "@/components/dashboard/planning-widgets";
 import { BreakEvenCard } from "@/components/dashboard/break-even-card";
+import { WeeklyCard } from "@/components/dashboard/weekly-card";
 import { MrrMovementChart } from "@/components/members/mrr-movement-chart";
 import Link from "next/link";
 import { eq } from "drizzle-orm";
@@ -111,6 +112,7 @@ export default async function DashboardPage() {
     },
     alerts: { span: "wide", node: <InsightsPanel insights={d.insights} prefs={prefs} /> },
     breakeven: { span: "narrow", node: <BreakEvenCard m={d.community} /> },
+    weekly: { span: "full", node: <WeeklyCard w={d.weekly} /> },
     movement: {
       span: "wide",
       node: (
@@ -308,7 +310,8 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-flow-row-dense gap-4 lg:grid-cols-5">
-        {prefs.order
+        {/* Los lunes, el resumen de la semana va primero. */}
+        {(d.weekly.isMonday ? ["weekly" as WidgetId, ...prefs.order.filter((id) => id !== "weekly")] : prefs.order)
           .filter((id) => !prefs.hidden.includes(id) && widgets[id].node)
           .map((id) => (
             <div key={id} className={SPAN[widgets[id].span]}>

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Inter, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
@@ -15,6 +15,16 @@ const bricolage = Bricolage_Grotesque({ variable: "--font-bricolage", subsets: [
 export const metadata: Metadata = {
   title: BRAND.name,
   description: `Sistema financiero de ${BRAND.company}: P&L, flujo de caja y aportes del propietario.`,
+  // Instalada en el iPhone: pantalla completa y nombre corto bajo el ícono.
+  appleWebApp: { capable: true, title: BRAND.name, statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f5f5ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#051617" },
+  ],
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {

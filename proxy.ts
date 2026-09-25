@@ -4,7 +4,8 @@ import { NextResponse, type NextRequest } from "next/server";
 // usuario activo, permisos) ocurre en el servidor en cada página y cada acción.
 const SESSION_COOKIE = "i101_session";
 // /api/cron se protege con CRON_SECRET (Vercel Cron manda el encabezado), no con sesión.
-const PUBLIC_PATHS = ["/login", "/api/cron"];
+// Manifest e íconos: el celular los pide antes de iniciar sesión para instalar la app.
+const PUBLIC_PATHS = ["/login", "/api/cron", "/manifest.webmanifest", "/pwa-icon", "/icon", "/apple-icon"];
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

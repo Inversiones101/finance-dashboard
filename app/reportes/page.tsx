@@ -1,5 +1,7 @@
 import { ArrowDownRight, ArrowUpRight, Minus, Scale } from "lucide-react";
 import { requirePage } from "@/lib/auth/session";
+import { can } from "@/lib/auth/permissions";
+import { MonthClosePanel } from "@/components/reports/month-close-panel";
 import { getDb } from "@/db/client";
 import { loadFinanceData } from "@/lib/data/finance-data";
 import {
@@ -61,7 +63,7 @@ function Line({ label, value, money, strong, indent, out }: { label: string; val
 }
 
 export default async function ReportesPage({ searchParams }: PageProps<"/reportes">) {
-  await requirePage("reports");
+  const user = await requirePage("reports");
   const q = await searchParams;
   const report = q.reporte === "flujo" || q.reporte === "balance" ? q.reporte : "resultados";
   const view = typeof q.vista === "string" && VIEW_TO_G[q.vista] ? q.vista : "mes";
@@ -87,6 +89,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
       <PageHeader title="Reportes" description="Estados financieros de la LLC: resultados, flujo de efectivo y balance general.">
         <ReportFilters view={view} from={from} to={to} currency={currency} hideView={report === "balance"} />
       </PageHeader>
+      <MonthClosePanel canClose={can(user.permissions, "reports", "write")} canReopen={can(user.permissions, "reports", "admin")} />
       <ReportTabs report={report} />
 
       {report === "resultados" &&

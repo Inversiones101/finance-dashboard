@@ -8,6 +8,10 @@ import { getUsdHnlRate } from "@/lib/fx";
 import { todayIn } from "@/lib/today";
 import { BRAND } from "@/lib/config";
 import { bankAlerts } from "@/lib/services/bank-sync";
+import { computeProjection } from "@/lib/finance/projection";
+import { computeAnomalies } from "@/lib/finance/anomalies";
+import { computeWeekly } from "@/lib/finance/weekly";
+import { getProjectionSettings } from "@/lib/data/projection";
 import type { Tx } from "@/lib/services/ledger";
 
 export async function getDashboard() {
@@ -24,12 +28,25 @@ export async function getDashboard() {
       });
   }
 
-  const [data, churn, bank] = await Promise.all([loadFinanceData(db), getChurnAssumptionPct(), bankAlerts(db as unknown as Tx)]);
+  const [data, churn, bank, projectionCfg] = await Promise.all([loadFinanceData(db), getChurnAssumptionPct(), bankAlerts(db as unknown as Tx), getProjectionSettings()]);
   const opts = { asOf: todayIn(BRAND.timeZone), hnlPerUsd: fx.hnlPerUsd, churnAssumption: churn / 100 };
   const dashboard = computeDashboard(data, opts);
   const community = computeCommunity(data, opts);
+  // Aviso anticipado: la caja proyectada baja del mínimo que definiste en Proyección.
+  const projection = computeProjection(data, { ...opts, minCashCents: projectionCfg.minCashCents });
+  const low = projection.firstBelowMin;
+  const cashAlert = low
+    ? [
+        {
+          severity: low.endCash < 0 ? ("urgent" as const) : ("warning" as const),
+          title: `La caja bajaría a ${low.endCash.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })} la semana del ${low.label}`,
+          detail: projectionCfg.minCashCents ? `Por debajo de tu caja mínima de ${(projectionCfg.minCashCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}. Revisa la proyección.` : "Revisa la proyección de caja.",
+          href: "/proyeccion",
+        },
+      ]
+    : [];
   // Lo del banco primero dentro de su severidad: es lo que mantiene los demás números correctos.
-  return { ...dashboard, insights: [...bank.filter((b) => b.severity === "warning"), ...dashboard.insights, ...bank.filter((b) => b.severity === "info")], community, fx };
+  return { ...dashboard, insights: [...cashAlert, ...bank.filter((b) => b.severity === "warning"), ...dashboard.insights, ...computeAnomalies(data, opts.asOf), ...bank.filter((b) => b.severity === "info")], community, weekly: computeWeekly(data, opts.asOf), fx };
 }
 
 /** Churn mensual supuesto (%) para el pronóstico mientras no haya historial de bajas. */

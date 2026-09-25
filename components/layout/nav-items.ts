@@ -13,6 +13,7 @@ import {
   Shapes,
   PiggyBank,
   Target,
+  LineChart,
   type LucideIcon,
 } from "lucide-react";
 
@@ -51,6 +52,7 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/presupuestos", label: "Presupuestos", icon: PiggyBank, module: "planning" },
       { href: "/metas", label: "Metas", icon: Target, module: "planning" },
+      { href: "/proyeccion", label: "Proyección", icon: LineChart, module: "planning" },
     ],
   },
   {

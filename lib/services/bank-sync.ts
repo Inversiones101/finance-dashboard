@@ -12,6 +12,7 @@ import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import * as s from "@/db/schema";
 import { normName } from "@/lib/import/skool-csv";
 import type { BankClient } from "@/lib/mercury/client";
+import { errorMessage } from "@/lib/actions/result";
 import { accountBalanceCents, addMonthsToDate, classifyMovement, payout, transfer, type MovementClass, type Tx } from "./ledger";
 
 export type InboxAs = MovementClass | "match" | "transfer" | "payout";
@@ -250,7 +251,7 @@ export async function acceptAllSuggestions(tx: Tx, userId: string | null) {
       await tx.transaction(async (sp) => resolveInboxItem(sp as unknown as Tx, p.id, { as: sug.as, description: sug.description, categoryId: sug.categoryId, productId: sug.productId }, userId));
       ok++;
     } catch (e) {
-      failed.push(`${p.counterparty ?? p.description ?? p.externalId}: ${e instanceof Error ? e.message : "error"}`);
+      failed.push(`${p.counterparty ?? p.description ?? p.externalId}: ${errorMessage(e)}`);
     }
   }
   return { ok, failed };

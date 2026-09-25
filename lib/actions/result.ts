@@ -34,6 +34,11 @@ export function parseForm<T extends z.ZodTypeAny>(schema: T, form: FormData): { 
   return { data: null, error: field ? `${field}: ${issue.message}` : issue.message };
 }
 
-export function errorMessage(e: unknown) {
-  return e instanceof Error ? e.message : "Ocurrió un error inesperado";
+export function errorMessage(e: unknown): string {
+  if (!(e instanceof Error)) return "Ocurrió un error inesperado";
+  // Drizzle envuelve los errores de Postgres ("Failed query: …"); las reglas de la base (ej. mes
+  // cerrado) traen su propio mensaje en español en `cause`.
+  const cause = (e as { cause?: unknown }).cause;
+  if (cause instanceof Error && /está cerrado/.test(cause.message)) return cause.message;
+  return e.message;
 }
