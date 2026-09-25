@@ -255,3 +255,32 @@ export async function acceptAllSuggestions(tx: Tx, userId: string | null) {
   }
   return { ok, failed };
 }
+
+// ── Alertas para el dashboard ──────────────────────────────────────────────
+
+/** Bandeja pendiente y cuentas cuyo saldo en el banco no cuadra con los libros. */
+export async function bankAlerts(tx: Tx): Promise<{ severity: "warning" | "info"; title: string; detail: string; href: string }[]> {
+  const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(s.bankInbox).where(eq(s.bankInbox.status, "pending"));
+  const statements = await tx
+    .select({ st: s.accountStatements, name: s.financialAccounts.name })
+    .from(s.accountStatements)
+    .innerJoin(s.financialAccounts, eq(s.financialAccounts.id, s.accountStatements.accountId))
+    .where(sql`${s.accountStatements.computedBalanceCents} is not null`)
+    .orderBy(desc(s.accountStatements.statementDate));
+  const latest = new Map<string, (typeof statements)[number]>();
+  for (const r of statements) if (!latest.has(r.st.accountId)) latest.set(r.st.accountId, r);
+
+  const out: Awaited<ReturnType<typeof bankAlerts>> = [];
+  if (n > 0) out.push({ severity: "info", title: `${n} movimiento${n === 1 ? "" : "s"} de Mercury por clasificar`, detail: "No cuentan en tus libros hasta que los confirmes.", href: "/cuentas" });
+  for (const { st, name } of latest.values()) {
+    const diff = st.closingBalanceCents - (st.computedBalanceCents ?? 0);
+    if (diff === 0) continue;
+    out.push({
+      severity: "warning",
+      title: `${name} no cuadra con el banco`,
+      detail: `Diferencia de ${(Math.abs(diff) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}${n > 0 ? ": clasifica lo pendiente y vuelve a sincronizar." : "."}`,
+      href: "/cuentas",
+    });
+  }
+  return out;
+}

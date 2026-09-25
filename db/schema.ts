@@ -362,6 +362,24 @@ export const products = pgTable("products", {
 });
 
 /**
+ * Historial de precios de lista. El precio cambia con cada lanzamiento: un miembro nuevo paga
+ * el precio vigente el día que entra y lo conserva (Skool respeta el precio de quien ya está).
+ * `products.list_price_cents` es solo el valor de respaldo para productos sin historial.
+ */
+export const productPrices = pgTable(
+  "product_prices",
+  {
+    id: id(),
+    productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+    priceCents: cents("price_cents").notNull(),
+    effectiveFrom: date("effective_from").notNull(),
+    note: text("note"), // "Lanzamiento de noviembre"
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("product_prices_product_date_idx").on(t.productId, t.effectiveFrom)]
+);
+
+/**
  * Miembros / suscriptores. Fuente del MRR, del churn y del pronóstico: el MRR es la suma
  * de los planes activos. Cancelar un miembro lo saca del MRR desde el fin de su periodo
  * pagado (`accessUntil`); reactivarlo lo vuelve a sumar.

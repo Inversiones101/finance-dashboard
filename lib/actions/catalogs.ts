@@ -3,8 +3,11 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import * as s from "@/db/schema";
+import { setPrice } from "@/lib/services/pricing";
+import { backfillSkoolFees, saveSkoolFee } from "@/lib/services/platform-fee";
+import { todayIn } from "@/lib/today";
 import { mutate } from "./mutate";
-import { fail, parseForm, zDate, zId, zInterval, zOptId, zOptMoney, zOptText, zText, type ActionResult } from "./result";
+import { fail, parseForm, zDate, zId, zInterval, zMoney, zOptId, zOptMoney, zOptText, zText, type ActionResult } from "./result";
 
 /** Traduce el error de FK de Postgres a algo entendible. */
 function inUse(e: unknown): never {
@@ -43,6 +46,24 @@ export async function deleteProductAction(id: string): Promise<ActionResult> {
   return mutate("settings", "admin", "products", "delete", async (tx) => {
     await tx.delete(s.products).where(eq(s.products.id, id)).catch(inUse);
     return { id, message: "Producto eliminado" };
+  });
+}
+
+// ── Precios ─────────────────────────────────────────────────────────────────
+const priceSchema = z.object({ productId: zId, priceCents: zMoney, effectiveFrom: zDate, note: zOptText });
+
+/** Nuevo precio de lista desde una fecha (ej. el día del lanzamiento). Los miembros actuales conservan el suyo. */
+export async function setPriceAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const p = parseForm(priceSchema, form);
+  if (!p.data) return fail(p.error);
+  const today = todayIn();
+  return mutate("settings", "write", "product_prices", "create", async (tx) => {
+    await setPrice(tx, p.data, today);
+    return {
+      id: p.data.productId,
+      message: p.data.effectiveFrom > today ? "Precio programado: aplica a miembros nuevos desde esa fecha" : "Precio actualizado: aplica a miembros nuevos",
+      diff: p.data,
+    };
   });
 }
 
@@ -165,5 +186,28 @@ export async function saveOperationsStartAction(_: ActionResult | null, form: Fo
       .values({ key: "operations_start_date", value })
       .onConflictDoUpdate({ target: s.settings.key, set: { value, updatedAt: new Date() } });
     return { message: "Fecha de inicio de operaciones guardada" };
+  });
+}
+
+// ── Comisión de Skool ───────────────────────────────────────────────────────
+const feeSchema = z.object({
+  pct: z.preprocess((v) => (v === "" || v === undefined ? null : String(v).replace(",", ".")), z.coerce.number().min(0).max(50).nullable()),
+  fixedCents: zOptMoney,
+});
+
+export async function saveSkoolFeeAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const p = parseForm(feeSchema, form);
+  if (!p.data) return fail(p.error);
+  const { pct, fixedCents } = p.data;
+  return mutate("settings", "admin", "settings", "update", async (tx) => {
+    await saveSkoolFee(tx, pct === null ? null : { pct, fixedCents });
+    return { message: pct === null ? "Sin comisión de Skool" : `Comisión de Skool: ${pct}%${fixedCents ? ` + $${(fixedCents / 100).toFixed(2)}` : ""} por cobro` };
+  });
+}
+
+export async function backfillSkoolFeesAction(): Promise<ActionResult> {
+  return mutate("settings", "admin", "revenues", "backfill_fees", async (tx) => {
+    const r = await backfillSkoolFees(tx);
+    return { message: `Comisión aplicada a ${r.count} cobros (${(r.totalCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })})`, diff: r };
   });
 }

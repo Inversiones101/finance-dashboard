@@ -7,6 +7,8 @@ import { loadFinanceData } from "@/lib/data/finance-data";
 import { getUsdHnlRate } from "@/lib/fx";
 import { todayIn } from "@/lib/today";
 import { BRAND } from "@/lib/config";
+import { bankAlerts } from "@/lib/services/bank-sync";
+import type { Tx } from "@/lib/services/ledger";
 
 export async function getDashboard() {
   const [db, fx] = await Promise.all([getDb(), getUsdHnlRate()]);
@@ -22,9 +24,10 @@ export async function getDashboard() {
       });
   }
 
-  const [data, churn] = await Promise.all([loadFinanceData(db), getChurnAssumptionPct()]);
+  const [data, churn, bank] = await Promise.all([loadFinanceData(db), getChurnAssumptionPct(), bankAlerts(db as unknown as Tx)]);
   const dashboard = computeDashboard(data, { asOf: todayIn(BRAND.timeZone), hnlPerUsd: fx.hnlPerUsd, churnAssumption: churn / 100 });
-  return { ...dashboard, fx };
+  // Lo del banco primero dentro de su severidad: es lo que mantiene los demás números correctos.
+  return { ...dashboard, insights: [...bank.filter((b) => b.severity === "warning"), ...dashboard.insights, ...bank.filter((b) => b.severity === "info")], fx };
 }
 
 /** Churn mensual supuesto (%) para el pronóstico mientras no haya historial de bajas. */

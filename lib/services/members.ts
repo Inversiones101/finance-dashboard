@@ -5,6 +5,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import * as s from "@/db/schema";
 import { addMonthsToDate, saveRevenue, type Tx } from "./ledger";
+import { priceOn } from "./pricing";
 
 type Interval = "monthly" | "quarterly" | "annual";
 const MONTHS: Record<Interval, number> = { monthly: 1, quarterly: 3, annual: 12 };
@@ -103,14 +104,16 @@ export async function ensureMemberForRevenue(
   const start = r.serviceStart ?? r.revenueDate;
   const periodEnd = addMonthsToDate(start, MONTHS[interval]);
   const [existing] = await tx.select().from(s.members).where(sql`lower(trim(${s.members.name})) = lower(trim(${r.customerName}))`);
-  const [product] = await tx.select().from(s.products).where(eq(s.products.id, r.productId));
-  const price = product?.listPriceCents ?? r.grossCents;
+  // Precio de lista vigente el día del cobro: los precios cambian con cada lanzamiento.
+  const listPrice = (await priceOn(tx, r.productId, start)) ?? r.grossCents;
 
   if (existing) {
     if (periodEnd > existing.currentPeriodEnd) {
+      // Mismo plan: conserva su precio (quien ya está no sube). Cambió de plan: toma el precio vigente.
+      const samePlan = existing.productId === r.productId && existing.billingInterval === interval;
       await tx
         .update(s.members)
-        .set({ productId: r.productId, billingInterval: interval, priceCents: price, currentPeriodEnd: periodEnd, status: "active", canceledOn: null, accessUntil: null, updatedAt: new Date() })
+        .set({ productId: r.productId, billingInterval: interval, priceCents: samePlan ? existing.priceCents : listPrice, currentPeriodEnd: periodEnd, status: "active", canceledOn: null, accessUntil: null, updatedAt: new Date() })
         .where(and(eq(s.members.id, existing.id)));
     }
     return existing.id;
@@ -120,7 +123,7 @@ export async function ensureMemberForRevenue(
     productId: r.productId,
     billingInterval: interval,
     currency: r.currency,
-    priceCents: price,
+    priceCents: listPrice,
     startedOn: r.revenueDate,
     currentPeriodEnd: periodEnd,
     notes: null,

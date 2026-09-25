@@ -8,6 +8,7 @@ import * as s from "@/db/schema";
 import { parseSkoolCsv, planSkoolImport, type Charge, type ImportPlan, type Interval, type SkoolRow } from "@/lib/import/skool-csv";
 import { saveRevenue, type Tx } from "./ledger";
 import { cancelMember } from "./members";
+import { feeFor, getSkoolFee } from "./platform-fee";
 
 type Context = { products: Record<Interval, typeof s.products.$inferSelect>; skoolAccountId: string | null };
 
@@ -59,6 +60,7 @@ export async function previewSkoolImport(tx: Tx, csv: string, today: string): Pr
 
 async function recordCharges(tx: Tx, ctx: Context, memberId: string, row: SkoolRow, charges: Charge[], userId: string | null) {
   const product = ctx.products[row.interval!];
+  const fee = await getSkoolFee(tx);
   for (const c of charges) {
     await saveRevenue(tx, {
       revenueDate: c.date,
@@ -70,7 +72,7 @@ async function recordCharges(tx: Tx, ctx: Context, memberId: string, row: SkoolR
       serviceStart: c.date,
       currency: "USD",
       grossCents: c.amountCents,
-      processorFeeCents: 0,
+      processorFeeCents: feeFor(c.amountCents, fee),
       affiliateFeeCents: 0,
       status: "available",
       depositAccountId: ctx.skoolAccountId,

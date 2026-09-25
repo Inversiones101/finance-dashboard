@@ -57,6 +57,13 @@
       "when": 1790376339548,
       "tag": "0007_bandeja_bancaria",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790377816022,
+      "tag": "0008_historial_precios",
+      "breakpoints": true
     }
   ]
 }

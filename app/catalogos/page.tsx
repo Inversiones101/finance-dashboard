@@ -1,5 +1,5 @@
 import { asc, eq, isNull } from "drizzle-orm";
-import { Check, Plus } from "lucide-react";
+import { Check, Plus, Tag } from "lucide-react";
 import { getDb } from "@/db/client";
 import * as s from "@/db/schema";
 import { requirePage } from "@/lib/auth/session";
@@ -19,6 +19,9 @@ import {
   saveProductAction,
   saveReminderAction,
   saveOperationsStartAction,
+  setPriceAction,
+  saveSkoolFeeAction,
+  backfillSkoolFeesAction,
 } from "@/lib/actions/catalogs";
 import { InlineForm } from "@/components/profile/inline-form";
 import { Button } from "@/components/ui/button";
@@ -26,6 +29,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader, Panel, Empty } from "@/components/crud/page-header";
 import { FormDialog } from "@/components/crud/form-dialog";
+import { priceSchedules } from "@/lib/services/pricing";
+import { countSkoolChargesWithoutFee, getSkoolFee } from "@/lib/services/platform-fee";
+import type { Tx } from "@/lib/services/ledger";
 import { ConfirmButton } from "@/components/crud/confirm-button";
 import { RowActions } from "@/components/crud/row-actions";
 import { StatusBadge } from "@/components/crud/status-badge";
@@ -102,10 +108,13 @@ export default async function CatalogosPage() {
   const canAdmin = can(user.permissions, "settings", "admin");
   const today = todayIn();
   const db = await getDb();
-  const [o, reminders, [ops]] = await Promise.all([
+  const [o, reminders, [ops], prices, skoolFee, feeless] = await Promise.all([
     getFormOptions(),
     db.select().from(s.reminders).where(isNull(s.reminders.doneAt)).orderBy(asc(s.reminders.dueOn)),
     db.select().from(s.settings).where(eq(s.settings.key, "operations_start_date")),
+    priceSchedules(db as unknown as Tx, today),
+    getSkoolFee(db as unknown as Tx),
+    countSkoolChargesWithoutFee(db as unknown as Tx),
   ]);
   const operationsStart = typeof ops?.value === "string" ? ops.value : "";
   const addBtn = (label: string) => (
@@ -142,6 +151,33 @@ export default async function CatalogosPage() {
               <p className="text-sm">{operationsStart ? formatDate(operationsStart) : "Sin definir"}</p>
             )}
           </Panel>
+          <Panel
+            className="mt-4"
+            title="Comisión de Skool"
+            description="Lo que Skool descuenta de cada pago. Se aplica a los cobros que entran por Skool (importación y renovaciones) para que el margen bruto sea real."
+            actions={
+              canAdmin && skoolFee && feeless > 0 ? (
+                <ConfirmButton
+                  title={`¿Aplicar la comisión a ${feeless} cobros?`}
+                  description="Son cobros de Skool registrados sin comisión. Baja tu ingreso neto y el saldo de Skool a lo que realmente recibiste."
+                  confirmLabel="Aplicar"
+                  action={backfillSkoolFeesAction}
+                  trigger={<Button size="sm" variant="outline">Aplicar a {feeless} cobros sin comisión</Button>}
+                />
+              ) : undefined
+            }
+          >
+            {canAdmin ? (
+              <InlineForm action={saveSkoolFeeAction} submitLabel="Guardar">
+                <FieldRow>
+                  <TextField label="Porcentaje por cobro" name="pct" type="number" defaultValue={skoolFee?.pct} hint="Ej. 2.9. Vacío = sin comisión." />
+                  <MoneyField label="Monto fijo por cobro" name="fixedCents" defaultCents={skoolFee?.fixedCents} hint="Ej. 0.30" />
+                </FieldRow>
+              </InlineForm>
+            ) : (
+              <p className="text-sm">{skoolFee ? `${skoolFee.pct}% + ${formatMoney(skoolFee.fixedCents)}` : "Sin definir"}</p>
+            )}
+          </Panel>
         </TabsContent>
 
         <TabsContent value="productos">
@@ -159,8 +195,9 @@ export default async function CatalogosPage() {
                     <TableHead>Producto</TableHead>
                     <TableHead>Línea</TableHead>
                     <TableHead>Cobro</TableHead>
+                    <TableHead>Precio de lista</TableHead>
                     <TableHead>Categoría</TableHead>
-                    <TableHead className="w-20" />
+                    <TableHead className="w-28" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -171,9 +208,75 @@ export default async function CatalogosPage() {
                       </TableCell>
                       <TableCell>{p.line ?? "—"}</TableCell>
                       <TableCell>{INTERVAL[p.defaultBillingInterval]}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const sch = prices.get(p.id);
+                          return (
+                            <>
+                              <p className="font-medium tabular">{sch?.current != null ? formatMoney(sch.current) : "—"}</p>
+                              {sch?.next && (
+                                <p className="text-xs text-warning">
+                                  {formatMoney(sch.next.priceCents)} desde {formatDate(sch.next.from)}
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell>{o.names.category.get(p.categoryId)}</TableCell>
                       <TableCell>
-                        <RowActions canEdit={canWrite} canDelete={canAdmin} wide editTitle="Editar producto" editAction={saveProductAction} editFields={<ProductFields o={o} d={p} />} deleteAction={deleteProductAction.bind(null, p.id)} deleteLabel={p.name} />
+                        <RowActions
+                          canEdit={canWrite}
+                          canDelete={canAdmin}
+                          wide
+                          editTitle="Editar producto"
+                          editAction={saveProductAction}
+                          editFields={<ProductFields o={o} d={p} />}
+                          deleteAction={deleteProductAction.bind(null, p.id)}
+                          deleteLabel={p.name}
+                          extra={
+                            canWrite ? (
+                              <FormDialog
+                                title={`Precio de ${p.name}`}
+                                description="El nuevo precio aplica a quien entre desde esa fecha. Los miembros actuales conservan el precio que pagan."
+                                action={setPriceAction}
+                                submitLabel="Guardar precio"
+                                trigger={
+                                  <Button variant="ghost" size="icon" className="size-8" aria-label="Cambiar precio" title="Cambiar precio">
+                                    <Tag className="size-3.5" />
+                                  </Button>
+                                }
+                              >
+                                <Hidden name="productId" value={p.id} />
+                                <FieldRow>
+                                  <MoneyField label="Nuevo precio" name="priceCents" defaultCents={prices.get(p.id)?.current} required />
+                                  <TextField label="Vigente desde" name="effectiveFrom" type="date" defaultValue={today} required hint="Puede ser futura: el día del lanzamiento." />
+                                </FieldRow>
+                                <TextField label="Nota" name="note" placeholder="Ej. Lanzamiento de noviembre" />
+                                {(prices.get(p.id)?.history.length ?? 0) > 0 && (
+                                  <div>
+                                    <p className="mb-1.5 text-xs font-medium text-muted-foreground">Historial</p>
+                                    <ul className="divide-y rounded-xl border text-sm">
+                                      {prices
+                                        .get(p.id)!
+                                        .history.slice()
+                                        .reverse()
+                                        .map((h) => (
+                                          <li key={h.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                                            <span className="font-medium tabular">{formatMoney(h.priceCents)}</span>
+                                            <span className="text-xs text-muted-foreground">
+                                              {h.from <= "2000-01-01" ? "Precio inicial" : `desde ${formatDate(h.from)}`}
+                                              {h.note && h.from > "2000-01-01" ? ` · ${h.note}` : ""}
+                                            </span>
+                                          </li>
+                                        ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </FormDialog>
+                            ) : null
+                          }
+                        />
                       </TableCell>
                     </TableRow>
                   ))}

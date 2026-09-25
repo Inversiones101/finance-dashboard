@@ -30,6 +30,9 @@ import { RowActions } from "@/components/crud/row-actions";
 import { StatusBadge } from "@/components/crud/status-badge";
 import { FieldRow, Hidden, MoneyField, SelectField, TextareaField, TextField } from "@/components/crud/fields";
 import { MrrForecast } from "@/components/dashboard/mrr-forecast";
+import { priceSchedules } from "@/lib/services/pricing";
+import { feeFor, getSkoolFee } from "@/lib/services/platform-fee";
+import type { Tx } from "@/lib/services/ledger";
 import { SkoolImportDialog } from "@/components/members/skool-import-dialog";
 import { cn } from "@/lib/utils";
 
@@ -53,7 +56,7 @@ function MemberFields({ o, d, today }: { o: FormOptions; d?: Member; today: stri
       </FieldRow>
       <FieldRow>
         <SelectField label="Frecuencia de cobro" name="billingInterval" options={RECURRING_OPTIONS} defaultValue={d?.billingInterval ?? "monthly"} />
-        <MoneyField label="Precio del plan" name="priceCents" defaultCents={d?.priceCents} required hint="Precio completo; es la base del MRR." />
+        <MoneyField label="Precio del plan" name="priceCents" defaultCents={d?.priceCents} required hint="Lo que paga este miembro (conserva su precio aunque el plan suba). Es la base del MRR." />
       </FieldRow>
       <FieldRow>
         <TextField label="Miembro desde" name="startedOn" type="date" defaultValue={d?.startedOn ?? today} required />
@@ -80,12 +83,14 @@ export default async function MiembrosPage({ searchParams }: PageProps<"/miembro
   const filter = typeof estado === "string" && FILTERS.some((f) => f.value === estado) ? estado : "activos";
 
   const db = await getDb();
-  const [o, rows, data, fx, churnPct] = await Promise.all([
+  const [o, rows, data, fx, churnPct, prices, skoolFee] = await Promise.all([
     getFormOptions(),
     db.select().from(s.members).orderBy(asc(s.members.name)),
     loadFinanceData(db),
     getUsdHnlRate(),
     getChurnAssumptionPct(),
+    priceSchedules(db as unknown as Tx, today),
+    getSkoolFee(db as unknown as Tx),
   ]);
   const m = computeMembers(data, { asOf: today, hnlPerUsd: fx.hnlPerUsd, churnAssumption: churnPct / 100 });
   const counts = (x: Member) => x.status === "active" || (!!x.accessUntil && x.accessUntil > today);
@@ -162,6 +167,15 @@ export default async function MiembrosPage({ searchParams }: PageProps<"/miembro
                             <p>{productName.get(x.productId)}</p>
                             <p className="text-xs text-muted-foreground">
                               {formatMoney(x.priceCents, x.currency)} · {INTERVAL[x.billingInterval].toLowerCase()}
+                              {(() => {
+                                // Entró con un precio menor al vigente y lo conserva.
+                                const now = prices.get(x.productId)?.current;
+                                return now != null && x.priceCents < now ? (
+                                  <span className="ml-1.5 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-medium text-accent-foreground" title={`Hoy el plan cuesta ${formatMoney(now)}`}>
+                                    precio anterior
+                                  </span>
+                                ) : null;
+                              })()}
                             </p>
                           </TableCell>
                           <TableCell>
@@ -209,7 +223,7 @@ export default async function MiembrosPage({ searchParams }: PageProps<"/miembro
                                           <MoneyField label="Monto cobrado" name="grossCents" defaultCents={x.priceCents} required />
                                         </FieldRow>
                                         <FieldRow>
-                                          <MoneyField label="Comisión de la plataforma" name="processorFeeCents" />
+                                          <MoneyField label="Comisión de la plataforma" name="processorFeeCents" defaultCents={feeFor(x.priceCents, skoolFee) || undefined} hint={skoolFee ? `Skool: ${skoolFee.pct}% + ${formatMoney(skoolFee.fixedCents)}` : undefined} />
                                           <MoneyField label="Comisión de afiliados" name="affiliateFeeCents" />
                                         </FieldRow>
                                         <SelectField label="¿Dónde cayó el dinero?" name="depositAccountId" options={o.depositAccounts} defaultValue={defaultDeposit} />
