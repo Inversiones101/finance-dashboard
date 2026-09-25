@@ -7,6 +7,7 @@ import { requirePage } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { getFormOptions } from "@/lib/data/options";
 import { ClassifyFields } from "@/components/forms/classify-fields";
+import { BankInbox } from "@/components/banking/bank-inbox";
 import { todayIn } from "@/lib/today";
 import { formatDate, formatMoney } from "@/lib/format";
 import { ACCOUNT_STATUS, ACCOUNT_TYPE, CURRENCY_OPTIONS, MOVEMENT_TYPE, toOptions } from "@/lib/labels";
@@ -168,6 +169,8 @@ export default async function CuentasPage({ searchParams }: PageProps<"/cuentas"
           </FormDialog>
         )}
       </PageHeader>
+
+      <BankInbox o={o} canWrite={canWrite} />
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-muted-foreground">Bancos y tarjetas · medios de pago de la LLC</h2>

@@ -519,6 +519,7 @@ export async function transfer(tx: Tx, t: { fromId: string; toId: string; date: 
     { accountId: from.id, movementDate: t.date, type: "transfer", amountCents: -t.amountCents, currency: from.currency, transferGroupId: group, description: t.description ?? `A ${to.name}`, createdBy: t.userId ?? null },
     { accountId: to.id, movementDate: t.date, type: "transfer", amountCents: t.amountCents, currency: to.currency, transferGroupId: group, description: t.description ?? `Desde ${from.name}`, createdBy: t.userId ?? null },
   ]);
+  return group;
 }
 
 export async function accountBalanceCents(tx: Tx, accountId: string, upTo: string) {
@@ -649,7 +650,7 @@ export async function payout(
       { accountId: platform.id, movementDate: p.date, type: "revenue_payout", amountCents: -p.amountCents, currency: platform.currency, transferGroupId: group, description: `Payout a ${to.name}`, createdBy: p.userId ?? null },
       { accountId: to.id, movementDate: p.date, type: "revenue_payout", amountCents: p.amountCents, currency: to.currency, transferGroupId: group, description: `Payout de ${platform.name}`, createdBy: p.userId ?? null },
     ]);
-    return;
+    return group;
   }
 
   const [draw] = await tx
@@ -699,7 +700,8 @@ export async function classifyMovement(
   }
   const amount = Math.abs(m.amountCents);
   const inflow = m.amountCents > 0;
-  const keep = { statementId: m.statementId, reconciled: m.reconciled };
+  // Lo que viene del banco (id de Mercury, conciliación) sobrevive a la reclasificación.
+  const keep = { statementId: m.statementId, reconciled: m.reconciled, externalId: m.externalId };
   const need = (ok: boolean, msg: string) => {
     if (!ok) throw new Error(msg);
   };

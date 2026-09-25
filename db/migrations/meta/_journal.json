@@ -50,6 +50,13 @@
       "when": 1790374772095,
       "tag": "0006_miembros_email",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790376339548,
+      "tag": "0007_bandeja_bancaria",
+      "breakpoints": true
     }
   ]
 }

@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 // Revisión optimista: solo mira si existe la cookie. La validación real (sesión vigente,
 // usuario activo, permisos) ocurre en el servidor en cada página y cada acción.
 const SESSION_COOKIE = "i101_session";
-const PUBLIC_PATHS = ["/login"];
+// /api/cron se protege con CRON_SECRET (Vercel Cron manda el encabezado), no con sesión.
+const PUBLIC_PATHS = ["/login", "/api/cron"];
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

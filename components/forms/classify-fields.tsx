@@ -21,15 +21,33 @@ const HINT: Record<string, string> = {
   owner_draw: "Dinero que sacas de la LLC para ti. Reduce tu capital.",
   bank_fee: "Comisiones del banco: gasto operativo.",
   adjustment: "Déjalo como ajuste solo si es una diferencia de conciliación.",
+  payout: "Dinero que Skool te pasa al banco: baja el saldo de Skool y sube el del banco. No es ingreso nuevo (ya se contó al cobrar).",
+  match: "Ya lo registraste a mano: solo se enlaza con el banco, sin duplicarlo.",
+  transfer: "Movimiento entre tus propias cuentas: no es ingreso ni gasto.",
+  ignore: "No se registra en los libros (ej. un duplicado o algo ya contado de otra forma).",
 };
 
 /**
  * Qué es un movimiento del banco. `direction` fija si entra o sale (al clasificar uno existente);
  * sin él (movimiento nuevo) se muestran todas las opciones.
  */
-export function ClassifyFields({ products, categories, direction }: { products: Option[]; categories: Option[]; direction?: "in" | "out" }) {
-  const options = direction === "in" ? IN : direction === "out" ? OUT : [...IN.map((o) => ({ ...o, group: "Entra dinero" })), ...OUT.map((o) => ({ ...o, group: "Sale dinero" }))];
-  const [as, setAs] = useState(options[0].value);
+export function ClassifyFields({
+  products,
+  categories,
+  direction,
+  extra = [],
+  defaults,
+}: {
+  products: Option[];
+  categories: Option[];
+  direction?: "in" | "out";
+  /** Opciones adicionales al inicio (bandeja del banco: payout, ya registrado, transferencia, ignorar). */
+  extra?: Option[];
+  defaults?: { as?: string | null; categoryId?: string | null; productId?: string | null };
+}) {
+  const base = direction === "in" ? IN : direction === "out" ? OUT : [...IN, ...OUT];
+  const options = [...extra, ...base];
+  const [as, setAs] = useState(defaults?.as && options.some((o) => o.value === defaults.as) ? defaults.as : options[0].value);
   return (
     <>
       <label className="flex flex-col gap-1.5 text-sm">
@@ -72,9 +90,9 @@ export function ClassifyFields({ products, categories, direction }: { products: 
       {(as === "revenue" || as === "expense") && (
         <FieldRow>
           {as === "revenue" ? (
-            <SelectField label="Producto" name="productId" options={products} placeholder="Otros ingresos" />
+            <SelectField label="Producto" name="productId" options={products} placeholder="Otros ingresos" defaultValue={defaults?.productId} />
           ) : (
-            <SelectField label="Categoría del gasto" name="categoryId" options={categories} placeholder="Elige…" required />
+            <SelectField label="Categoría del gasto" name="categoryId" options={categories} placeholder="Elige…" required defaultValue={defaults?.categoryId} />
           )}
         </FieldRow>
       )}

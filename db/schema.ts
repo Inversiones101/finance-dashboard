@@ -321,6 +321,8 @@ export const financialAccounts = pgTable("financial_accounts", {
   cashbackPct: numeric("cashback_pct", { precision: 5, scale: 3 }), // IO = 1.5
   status: accountStatusEnum("status").notNull().default("active"),
   sortOrder: integer("sort_order").notNull().default(0),
+  /** Id de la cuenta en el banco (Mercury) para sincronizar movimientos. */
+  externalId: text("external_id"),
   ...timestamps,
 });
 
@@ -714,4 +716,45 @@ export const settings = pgTable("settings", {
   key: varchar("key", { length: 60 }).primaryKey(),
   value: jsonb("value").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sincronización bancaria (Mercury)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const bankInboxStatusEnum = pgEnum("bank_inbox_status", ["pending", "classified", "ignored"]);
+
+/**
+ * Bandeja "Por clasificar": transacciones crudas del banco. No tocan los libros hasta que
+ * alguien las confirma; al confirmarlas se crea el registro contable y `cashMovementId` apunta a él.
+ * `suggestion` = lo que el sistema propone (regla, pareja de transferencia o movimiento ya registrado).
+ */
+export const bankInbox = pgTable(
+  "bank_inbox",
+  {
+    id: id(),
+    accountId: uuid("account_id").notNull().references(() => financialAccounts.id, { onDelete: "cascade" }),
+    externalId: text("external_id").notNull(),
+    postedOn: date("posted_on").notNull(),
+    amountCents: cents("amount_cents").notNull(), // con signo: + entra, − sale
+    counterparty: text("counterparty"),
+    description: text("description"),
+    status: bankInboxStatusEnum("status").notNull().default("pending"),
+    suggestion: jsonb("suggestion"),
+    cashMovementId: uuid("cash_movement_id").references(() => cashMovements.id, { onDelete: "set null" }),
+    resolvedBy: createdBy(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("bank_inbox_external_idx").on(t.accountId, t.externalId), index("bank_inbox_status_idx").on(t.status)]
+);
+
+/** "Si la contraparte contiene X, clasifícala como Y". Se crean al marcar "recordar". */
+export const classificationRules = pgTable("classification_rules", {
+  id: id(),
+  pattern: text("pattern").notNull().unique(), // minúsculas, sin acentos
+  as: varchar("as", { length: 30 }).notNull(),
+  categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
+  productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
+  description: text("description"),
+  ...timestamps,
 });
