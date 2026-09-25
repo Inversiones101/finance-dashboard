@@ -406,6 +406,27 @@ export const members = pgTable(
   (t) => [index("members_status_idx").on(t.status), uniqueIndex("members_email_idx").on(t.email)]
 );
 
+export const memberEventTypeEnum = pgEnum("member_event_type", ["new", "change", "cancel", "reactivate"]);
+
+/**
+ * Bitácora del MRR por miembro: cada alta, cambio de plan o de precio, baja y reactivación con
+ * cuánto movió el MRR (centavos al mes, con signo). Es la base del "movimiento del MRR": como
+ * los precios cambian, no se puede reconstruir solo con el precio actual de cada miembro.
+ * Una baja se fecha el día que deja de contar (fin de su periodo pagado).
+ */
+export const memberEvents = pgTable(
+  "member_events",
+  {
+    id: id(),
+    memberId: uuid("member_id").notNull().references(() => members.id, { onDelete: "cascade" }),
+    eventDate: date("event_date").notNull(),
+    type: memberEventTypeEnum("type").notNull(),
+    mrrDeltaCents: cents("mrr_delta_cents").notNull(),
+    ...timestamps,
+  },
+  (t) => [index("member_events_date_idx").on(t.eventDate), index("member_events_member_idx").on(t.memberId)]
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. P&L — Ingresos
 // ─────────────────────────────────────────────────────────────────────────────

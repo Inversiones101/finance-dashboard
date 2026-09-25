@@ -2,7 +2,7 @@ import "server-only";
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { exchangeRates, settings } from "@/db/schema";
-import { computeDashboard } from "@/lib/finance/engine";
+import { computeCommunity, computeDashboard } from "@/lib/finance/engine";
 import { loadFinanceData } from "@/lib/data/finance-data";
 import { getUsdHnlRate } from "@/lib/fx";
 import { todayIn } from "@/lib/today";
@@ -25,9 +25,11 @@ export async function getDashboard() {
   }
 
   const [data, churn, bank] = await Promise.all([loadFinanceData(db), getChurnAssumptionPct(), bankAlerts(db as unknown as Tx)]);
-  const dashboard = computeDashboard(data, { asOf: todayIn(BRAND.timeZone), hnlPerUsd: fx.hnlPerUsd, churnAssumption: churn / 100 });
+  const opts = { asOf: todayIn(BRAND.timeZone), hnlPerUsd: fx.hnlPerUsd, churnAssumption: churn / 100 };
+  const dashboard = computeDashboard(data, opts);
+  const community = computeCommunity(data, opts);
   // Lo del banco primero dentro de su severidad: es lo que mantiene los demás números correctos.
-  return { ...dashboard, insights: [...bank.filter((b) => b.severity === "warning"), ...dashboard.insights, ...bank.filter((b) => b.severity === "info")], fx };
+  return { ...dashboard, insights: [...bank.filter((b) => b.severity === "warning"), ...dashboard.insights, ...bank.filter((b) => b.severity === "info")], community, fx };
 }
 
 /** Churn mensual supuesto (%) para el pronóstico mientras no haya historial de bajas. */

@@ -8,7 +8,7 @@ import { can } from "@/lib/auth/permissions";
 import type { SessionUser } from "@/lib/auth/session";
 import { loadFinanceData } from "@/lib/data/finance-data";
 import { getChurnAssumptionPct } from "@/lib/data/dashboard";
-import { computeDashboard, computePnlReport, GOAL_METRICS } from "@/lib/finance/engine";
+import { computeCommunity, computeDashboard, computePnlReport, GOAL_METRICS } from "@/lib/finance/engine";
 import { getUsdHnlRate } from "@/lib/fx";
 import { todayIn } from "@/lib/today";
 
@@ -30,6 +30,12 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
     name: "resumen_financiero",
     description:
       "Resumen del negocio al día de hoy: caja en bancos, saldo en plataformas (Skool), resultado del mes (ingresos, utilidad, márgenes, EBITDA), MRR/ARR, miembros, burn, runway, deudas y compromisos, próximos movimientos, alertas, presupuesto del mes y metas. Úsala antes de responder cualquier pregunta sobre cómo va el negocio.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "metricas_comunidad",
+    description:
+      "Métricas de la comunidad: movimiento del MRR por mes (nuevos, expansión, contracción, bajas, reactivaciones), punto de equilibrio (miembros necesarios para cubrir costos fijos), ARPU, LTV, CAC, LTV/CAC, meses de recuperación, retención por cohorte y mezcla mensual/anual. Montos en dólares. Úsala para preguntas sobre crecimiento, retención, precios o cuántos miembros faltan.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
@@ -244,6 +250,12 @@ export async function runTool(
           tipo_de_cambio: fx.hnlPerUsd,
         }),
       };
+    }
+    case "metricas_comunidad": {
+      if (!can(user.permissions, "revenue")) return deny("ver miembros e ingresos");
+      const [data, fx, churn] = await Promise.all([loadFinanceData(db), getUsdHnlRate(), getChurnAssumptionPct()]);
+      const c = computeCommunity(data, { asOf: today, hnlPerUsd: fx.hnlPerUsd, churnAssumption: churn / 100 });
+      return { result: JSON.stringify({ hoy: today, ...c, nota: "churn_es_supuesto indica si el churn aún no es medido", churn_es_supuesto: c.churnIsAssumption }) };
     }
     case "listar_movimientos": {
       const p = z.object({ tipo: z.enum(["gastos", "ingresos"]), mes: month }).safeParse(input);

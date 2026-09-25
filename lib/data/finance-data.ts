@@ -10,7 +10,7 @@ const num = (v: string | number | null | undefined) => (v === null || v === unde
 
 /** Lee todo lo que necesita el motor. A esta escala (cientos/miles de filas) cabe en memoria sin problema. */
 export async function loadFinanceData(db: AnyDb): Promise<FinanceData> {
-  const [categories, products, accounts, revenues, expenses, movements, ownerLedger, debts, debtPayments, contracts, subscriptions, taxes, reminders, members, budgets, goals, [opsStart]] =
+  const [categories, products, accounts, revenues, expenses, movements, ownerLedger, debts, debtPayments, contracts, subscriptions, taxes, reminders, members, memberEvents, budgets, goals, [opsStart]] =
     await Promise.all([
       db.select().from(s.categories),
       db.select().from(s.products),
@@ -26,6 +26,7 @@ export async function loadFinanceData(db: AnyDb): Promise<FinanceData> {
       db.select().from(s.taxObligations),
       db.select().from(s.reminders).where(isNull(s.reminders.doneAt)),
       db.select().from(s.members),
+      db.select().from(s.memberEvents),
       db.select().from(s.budgets),
       db.select().from(s.goals),
       db.select().from(s.settings).where(eq(s.settings.key, "operations_start_date")),
@@ -136,6 +137,7 @@ export async function loadFinanceData(db: AnyDb): Promise<FinanceData> {
       canceledOn: m.canceledOn,
       accessUntil: m.accessUntil,
     })),
+    memberEvents: memberEvents.map((e) => ({ memberId: e.memberId, date: e.eventDate, type: e.type, mrrDeltaCents: e.mrrDeltaCents })),
     operationsStart: typeof opsStart?.value === "string" ? opsStart.value : null,
     budgets: budgets.map((b) => ({ categoryId: b.categoryId, month: b.month, amountCents: b.amountCents })),
     goals: goals.map((g) => ({ id: g.id, name: g.name, metric: g.metric, target: Number(g.target), periodStart: g.periodStart, periodEnd: g.periodEnd, status: g.status })),

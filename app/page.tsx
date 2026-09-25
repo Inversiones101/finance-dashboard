@@ -26,6 +26,9 @@ import { MonthlyChart } from "@/components/dashboard/monthly-chart";
 import { BreakdownCard } from "@/components/dashboard/breakdown-card";
 import { CustomizeDashboard } from "@/components/dashboard/customize-dashboard";
 import { BudgetWidget, GoalsWidget } from "@/components/dashboard/planning-widgets";
+import { BreakEvenCard } from "@/components/dashboard/break-even-card";
+import { MrrMovementChart } from "@/components/members/mrr-movement-chart";
+import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { users } from "@/db/schema";
@@ -107,6 +110,24 @@ export default async function DashboardPage() {
       ),
     },
     alerts: { span: "wide", node: <InsightsPanel insights={d.insights} prefs={prefs} /> },
+    breakeven: { span: "narrow", node: <BreakEvenCard m={d.community} /> },
+    movement: {
+      span: "wide",
+      node: (
+        <div className="h-full rounded-3xl border bg-surface p-5 shadow-card">
+          <div className="mb-3 flex items-start justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold">Movimiento del MRR</h2>
+              <p className="text-xs text-muted-foreground">Qué sumó y qué restó cada mes</p>
+            </div>
+            <Link href="/miembros?vista=metricas" className="text-xs text-muted-foreground hover:text-foreground">
+              Ver métricas →
+            </Link>
+          </div>
+          {d.community.hasMovement ? <MrrMovementChart data={d.community.movement} /> : <p className="text-sm text-muted-foreground">Aparece en cuanto haya altas o bajas.</p>}
+        </div>
+      ),
+    },
     results: {
       span: "narrow",
       node: (

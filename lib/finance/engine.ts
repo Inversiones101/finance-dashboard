@@ -95,6 +95,8 @@ export type FinanceData = {
   taxObligations: { name: string; dueDate: string; currency: Currency; estimatedCents: number; paidCents: number; status: string }[];
   reminders: { dueOn: string; title: string; detail: string | null; amountCents: number | null; done: boolean }[];
   members?: Member[];
+  /** Bitácora del MRR (alta, cambio, baja, reactivación) con su efecto en centavos al mes. */
+  memberEvents?: MemberEvent[];
   budgets?: { categoryId: string; month: string | null; amountCents: number }[];
   goals?: Goal[];
   /**
@@ -121,6 +123,8 @@ export type Member = {
   canceledOn: string | null;
   accessUntil: string | null;
 };
+
+export type MemberEvent = { memberId: string; date: string; type: "new" | "change" | "cancel" | "reactivate"; mrrDeltaCents: number };
 
 export type EngineOptions = {
   /** Fecha de corte YYYY-MM-DD (hoy, en la zona horaria del negocio). */
@@ -366,6 +370,130 @@ export function computeMembers(data: FinanceData, opts: EngineOptions) {
     lastMonthMrr: mrrOn(`${currentMonth}-01`),
     forecast,
     renewalsSoon,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Métricas de comunidad: movimiento del MRR, punto de equilibrio, LTV/CAC, cohortes
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MARKETING = /marketing|publicidad|ads|anuncio/i;
+
+/**
+ * Todo sale de datos reales: el movimiento del MRR de la bitácora de miembros (así un aumento de
+ * precio para nuevos no se confunde con expansión), los costos del P&L y el churn observado.
+ * Cuando un dato aún no es confiable devuelve `null` y la pantalla lo explica en vez de inventar.
+ */
+export function computeCommunity(data: FinanceData, opts: EngineOptions & { lookbackMonths?: number }) {
+  const { asOf, lookbackMonths = 3 } = opts;
+  const members = data.members ?? [];
+  const events = (data.memberEvents ?? []).filter((e) => e.date <= asOf);
+  const currentMonth = monthOf(asOf);
+  const base = computeMembers(data, opts);
+  const lines = makePnl(data);
+
+  // ── Movimiento del MRR (últimos 6 meses con actividad) ─────────────────────
+  const firstEvent = events.reduce<string | null>((min, e) => (!min || e.date < min ? e.date : min), null);
+  const start = firstEvent && monthOf(firstEvent) > addMonths(currentMonth, -5) ? monthOf(firstEvent) : addMonths(currentMonth, -5);
+  const movement: { month: string; label: string; new: number; expansion: number; contraction: number; churn: number; reactivation: number; net: number; endMrr: number }[] = [];
+  for (let m = start; m <= currentMonth; m = addMonths(m, 1)) {
+    const inMonth = events.filter((e) => monthOf(e.date) === m);
+    const by = (f: (e: MemberEvent) => boolean) => sum(inMonth.filter(f).map((e) => e.mrrDeltaCents));
+    const row = {
+      new: by((e) => e.type === "new"),
+      expansion: by((e) => e.type === "change" && e.mrrDeltaCents > 0),
+      contraction: by((e) => e.type === "change" && e.mrrDeltaCents < 0),
+      churn: by((e) => e.type === "cancel"),
+      reactivation: by((e) => e.type === "reactivate"),
+    };
+    const net = row.new + row.expansion + row.contraction + row.churn + row.reactivation;
+    const endMrr = sum(events.filter((e) => monthOf(e.date) <= m).map((e) => e.mrrDeltaCents));
+    movement.push({
+      month: m,
+      label: monthLabel(m),
+      new: toDollars(row.new),
+      expansion: toDollars(row.expansion),
+      contraction: toDollars(row.contraction),
+      churn: toDollars(row.churn),
+      reactivation: toDollars(row.reactivation),
+      net: toDollars(net),
+      endMrr: toDollars(endMrr),
+    });
+  }
+
+  // ── Economía por miembro ───────────────────────────────────────────────────
+  const window = Array.from({ length: lookbackMonths }, (_, i) => addMonths(currentMonth, -i));
+  const pnl = lines((d) => window.includes(monthOf(d)));
+  const months = Math.max(1, Math.min(lookbackMonths, window.filter((m) => !firstEvent || m >= monthOf(firstEvent)).length));
+  const arpu = base.activeCount ? base.mrr / base.activeCount : null; // centavos al mes
+  const feeRate = pnl.gross > 0 ? (pnl.processorFees + pnl.affiliateFees) / pnl.gross : 0;
+  const grossMargin = pnl.revenue > 0 ? pnl.grossProfit / pnl.revenue : null;
+  const contribution = arpu !== null ? arpu * (1 - feeRate) * (grossMargin ?? 1) : null; // lo que deja cada miembro al mes
+
+  // Punto de equilibrio: costos fijos del mes (gastos operativos + costos directos) ÷ lo que deja cada miembro.
+  const fixedCosts = (pnl.opex + pnl.cogs + pnl.depreciation + pnl.interest) / months;
+  const contributionForBreakEven = arpu !== null ? arpu * (1 - feeRate) : null;
+  const membersNeeded = contributionForBreakEven && fixedCosts > 0 ? Math.ceil(fixedCosts / contributionForBreakEven) : null;
+
+  // LTV = lo que deja un miembro al mes × cuántos meses se queda (1 / churn).
+  const ltv = contribution !== null && base.churnUsed > 0 ? contribution / base.churnUsed : null;
+
+  // CAC = gasto en marketing ÷ miembros nuevos, en la misma ventana.
+  const marketing = sum([...pnl.detail.opexByCategory.entries()].filter(([name]) => MARKETING.test(name)).map(([, v]) => v));
+  const newMembers = members.filter((m) => window.includes(monthOf(m.startedOn))).length;
+  const cac = newMembers > 0 ? marketing / newMembers : null;
+  const payback = cac && contribution ? cac / contribution : null;
+
+  // ── Cohortes: de los que entraron cada mes, % que sigue activo k meses después ─
+  const cohortMonths = [...new Set(members.map((m) => monthOf(m.startedOn)))].sort().slice(-12);
+  const cohorts = cohortMonths.map((cm) => {
+    const group = members.filter((m) => monthOf(m.startedOn) === cm);
+    const retention: (number | null)[] = [];
+    for (let k = 0; k <= 11; k++) {
+      const month = addMonths(cm, k);
+      if (month > currentMonth) break;
+      const at = month === currentMonth ? asOf : `${month}-${String(daysInMonth(month)).padStart(2, "0")}`;
+      retention.push(group.length ? group.filter((m) => memberCountsOn(m, at)).length / group.length : null);
+    }
+    return { month: cm, label: monthLabel(cm), size: group.length, retention };
+  });
+
+  // ── Mezcla de planes ───────────────────────────────────────────────────────
+  const active = members.filter((m) => memberCountsOn(m, asOf));
+  const mrrOf = (m: Member) => (m.billingInterval === "one_time" ? 0 : m.priceCents / INTERVAL_MONTHS[m.billingInterval]);
+  const mix = (["monthly", "annual", "quarterly"] as const)
+    .map((interval) => {
+      const list = active.filter((m) => m.billingInterval === interval);
+      return { interval, members: list.length, mrr: toDollars(sum(list.map(mrrOf))) };
+    })
+    .filter((x) => x.members > 0);
+
+  return {
+    mrr: toDollars(base.mrr),
+    activeCount: base.activeCount,
+    movement,
+    hasMovement: events.length > 0,
+    arpu: arpu !== null ? toDollars(arpu) : null,
+    feeRate,
+    grossMargin,
+    breakEven: {
+      fixedCosts: toDollars(fixedCosts),
+      membersNeeded,
+      progress: membersNeeded ? Math.min(1, base.activeCount / membersNeeded) : null,
+      missing: membersNeeded !== null ? Math.max(0, membersNeeded - base.activeCount) : null,
+      mrrNeeded: 1 - feeRate > 0 ? toDollars(fixedCosts / (1 - feeRate)) : null,
+    },
+    churn: base.churnUsed,
+    churnIsAssumption: base.churnIsAssumption,
+    ltv: ltv !== null ? toDollars(ltv) : null,
+    marketing: toDollars(marketing),
+    newMembers,
+    cac: cac !== null ? toDollars(cac) : null,
+    ltvToCac: ltv !== null && cac ? ltv / cac : null,
+    paybackMonths: payback,
+    windowMonths: months,
+    cohorts,
+    mix,
   };
 }
 

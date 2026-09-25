@@ -11,6 +11,8 @@ export const WIDGETS = [
   { id: "forecast", label: "Pronóstico de MRR" },
   { id: "budgets", label: "Presupuesto del mes" },
   { id: "goals", label: "Metas" },
+  { id: "breakeven", label: "Punto de equilibrio" },
+  { id: "movement", label: "Movimiento del MRR" },
 ] as const;
 
 export type WidgetId = (typeof WIDGETS)[number]["id"];

@@ -64,6 +64,13 @@
       "when": 1790377816022,
       "tag": "0008_historial_precios",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790378062572,
+      "tag": "0009_eventos_miembros",
+      "breakpoints": true
     }
   ]
 }

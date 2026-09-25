@@ -7,7 +7,7 @@ import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import * as s from "@/db/schema";
 import { parseSkoolCsv, planSkoolImport, type Charge, type ImportPlan, type Interval, type SkoolRow } from "@/lib/import/skool-csv";
 import { saveRevenue, type Tx } from "./ledger";
-import { cancelMember } from "./members";
+import { cancelMember, trackMember } from "./members";
 import { feeFor, getSkoolFee } from "./platform-fee";
 
 type Context = { products: Record<Interval, typeof s.products.$inferSelect>; skoolAccountId: string | null };
@@ -108,14 +108,14 @@ export async function applySkoolImport(tx: Tx, csv: string, today: string, userI
       accessUntil: null,
       updatedAt: new Date(),
     };
-    let memberId: string;
-    if (item.kind === "new") {
-      const [m] = await tx.insert(s.members).values({ ...values, currency: "USD", startedOn: row.joinedOn }).returning({ id: s.members.id });
-      memberId = m.id;
-    } else {
-      memberId = item.member.id;
-      await tx.update(s.members).set(values).where(eq(s.members.id, memberId));
-    }
+    const memberId = await trackMember(tx, item.kind === "new" ? null : item.member.id, today, async () => {
+      if (item.kind === "new") {
+        const [m] = await tx.insert(s.members).values({ ...values, currency: "USD", startedOn: row.joinedOn }).returning({ id: s.members.id });
+        return m.id;
+      }
+      await tx.update(s.members).set(values).where(eq(s.members.id, item.member.id));
+      return item.member.id;
+    });
     await recordCharges(tx, ctx, memberId, row, item.charges, userId);
     count[item.kind]++;
     count.charges += item.charges.length;
