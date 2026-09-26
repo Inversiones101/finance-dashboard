@@ -304,7 +304,9 @@ function makePnl(data: FinanceData) {
     const grossProfit = revenue - cogs;
     const ebitda = grossProfit - opex;
     const ebit = ebitda - depreciation;
-    const ebt = ebit - interest + other - preOperating;
+    // La puesta en marcha es capital del dueño invertido antes de operar: no resta de la utilidad.
+    // Se muestra aparte (memo) y en el balance reduce el capital directamente.
+    const ebt = ebit - interest + other;
     const netProfit = ebt - taxes;
     return { gross, processorFees, affiliateFees, revenue, cogs, grossProfit, opex, ebitda, depreciation, ebit, interest, other, preOperating, ebt, taxes, netProfit, expenseCount, detail: d };
   };
@@ -1074,10 +1076,10 @@ export const PNL_ROWS = [
   { key: "ebit", label: "EBIT (utilidad operativa)", strong: true },
   { key: "interest", label: "− Intereses y costos financieros", out: true, detail: "interestByCategory" },
   { key: "other", label: "± Otros ingresos y gastos", detail: "otherByType" },
-  { key: "preOperating", label: "− Puesta en marcha (cubierta con capital inicial)", out: true, detail: "preOperatingByCategory" },
   { key: "ebt", label: "Utilidad antes de impuestos", strong: true },
   { key: "taxes", label: "− Impuestos sobre la renta", out: true },
   { key: "netProfit", label: "Utilidad neta", strong: true },
+  { key: "preOperating", label: "Aparte: puesta en marcha pagada con tu capital inicial (no resta de la utilidad)", memo: true, detail: "preOperatingByCategory" },
 ] as const;
 
 export type PnlKey = (typeof PNL_ROWS)[number]["key"];
@@ -1252,7 +1254,7 @@ export function computeBalanceSheet(data: FinanceData, { asOf, hnlPerUsd }: { as
   const lines = makePnl(data);
   const history = lines((d) => d <= asOf);
   const preOperating = history.preOperating;
-  const retained = history.netProfit + preOperating; // resultado sin la puesta en marcha
+  const retained = history.netProfit; // la utilidad ya no incluye la puesta en marcha
   const openingBalances = sum(llc.map((a) => (a.type === "credit_card" ? 0 : usdByCurrency(a.openingBalanceCents, a.currency))));
   const capital = ownerSum("contribution");
   const draws = ownerSum("draw");

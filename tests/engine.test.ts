@@ -28,12 +28,12 @@ describe("P&L de septiembre 2026 (cuadra con el panel de Skool)", () => {
   });
   it("utilidad bruta y neta", () => {
     // Lo pagado por el dueño antes del 20 sep (Loom, cuota 2, Skool Pro) es puesta en marcha:
-    // fuera de la utilidad bruta y el EBITDA, pero sí resta en la utilidad neta.
+    // capital del dueño: fuera de la utilidad bruta, el EBITDA y también de la utilidad neta.
     expect(d.kpis.grossProfit).toBe(3886);
     expect(d.kpis.ebitda).toBe(3886);
     expect(d.kpis.preOperating).toBe(623);
-    expect(d.kpis.netProfit).toBe(3264.05); // + ajuste de conciliación de Skool ($1.05)
-    expect(d.kpis.netMargin).toBeCloseTo(0.84, 2);
+    expect(d.kpis.netProfit).toBe(3887.05); // EBITDA + ajuste de conciliación de Skool ($1.05)
+    expect(d.kpis.netMargin).toBeCloseTo(1, 2);
   });
   it("ingresos por producto separan membresía mensual y anual", () => {
     expect(d.month.revenueByProduct.map((p) => p.name).sort()).toEqual(["Membresía anual", "Membresía mensual"]);
@@ -86,7 +86,7 @@ describe("Estados financieros", () => {
     expect(aug.opex).toBe(0);
     expect(aug.interest).toBe(0);
     expect(aug.preOperating).toBeCloseTo(2732.86, 2);
-    expect(aug.netProfit).toBeCloseTo(-2732.86, 2);
+    expect(aug.netProfit).toBe(0); // no resta: se pagó con capital inicial
     expect(sep.processorFees + sep.affiliateFees).toBe(148);
     expect(sep.ebitda).toBe(3886);
     expect(sep.preOperating).toBe(623);

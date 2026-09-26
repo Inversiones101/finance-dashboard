@@ -25,7 +25,7 @@ const PNL_EN: Record<string, string> = {
   ebit: "Operating income (EBIT)",
   interest: "Interest & financing costs",
   other: "Other income / expense",
-  preOperating: "Start-up costs (owner-funded)",
+  preOperating: "Memo: start-up costs paid with owner capital (excluded from net income)",
   ebt: "Income before taxes",
   taxes: "Income taxes",
   netProfit: "Net income",

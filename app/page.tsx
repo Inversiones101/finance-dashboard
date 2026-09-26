@@ -148,7 +148,7 @@ export default async function DashboardPage() {
               </p>
             )}
             {kpis.preOperating > 0 && (
-              <p className="mt-1 text-xs text-muted-foreground">Incluye {formatUSD(kpis.preOperating)} de puesta en marcha cubiertos con tu capital inicial.</p>
+              <p className="mt-1 text-xs text-muted-foreground">No incluye {formatUSD(kpis.preOperating)} de puesta en marcha: se pagaron con tu capital inicial.</p>
             )}
           </div>
           <div className="grid grid-cols-3 gap-2">

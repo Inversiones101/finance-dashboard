@@ -5,7 +5,7 @@ import { ChevronRight } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
-type Row = { key: string; label: string; strong?: boolean; out?: boolean; detail?: string };
+type Row = { key: string; label: string; strong?: boolean; out?: boolean; memo?: boolean; detail?: string };
 type Period = { key: string; label: string; values: Record<string, number>; details: Record<string, Record<string, number>>; netMargin: number | null };
 
 /** Estado de resultados con líneas desplegables (desglose por producto o categoría). */
@@ -38,7 +38,7 @@ export function PnlTable({ rows, periods, total, rate, symbol }: { rows: readonl
             const isOpen = !!open[r.key];
             return (
               <Fragment key={r.key}>
-                <TableRow className={r.strong ? "bg-surface-2/50" : ""}>
+                <TableRow className={r.memo ? "border-t-2 border-dashed text-xs italic" : r.strong ? "bg-surface-2/50" : ""}>
                   <TableCell className={cn("sticky left-0 z-10 bg-surface whitespace-nowrap", r.strong && "bg-surface-2 font-semibold", !r.strong && "text-muted-foreground")}>
                     {expandable ? (
                       <button
