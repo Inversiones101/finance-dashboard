@@ -30,7 +30,7 @@ describe("parser del CSV de Skool", () => {
       )
     );
     expect(error).toBeNull();
-    expect(rows[0]).toEqual({ name: "Ana Pérez", email: "ana@x.com", joinedOn: "2026-09-16", interval: "monthly", priceCents: 3700, ltvCents: 3700 });
+    expect(rows[0]).toEqual({ name: "Ana Pérez", email: "ana@x.com", joinedOn: "2026-09-16", interval: "monthly", priceCents: 3700, ltvCents: 3700, invitedBy: null });
     expect(rows[1]).toMatchObject({ interval: "annual", priceCents: 19700 });
     expect(rows[2]).toMatchObject({ interval: null, priceCents: 0 });
     expect(rows[3]).toMatchObject({ interval: null, priceCents: 0 });

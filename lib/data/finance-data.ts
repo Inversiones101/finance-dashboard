@@ -62,6 +62,7 @@ export async function loadFinanceData(db: AnyDb): Promise<FinanceData> {
       fxRateToUsd: num(r.fxRateToUsd),
       status: r.status,
       depositAccountId: r.depositAccountId,
+      affiliateName: r.affiliateName,
     })),
     expenses: expenses.map((e) => ({
       date: e.expenseDate,
@@ -74,6 +75,7 @@ export async function loadFinanceData(db: AnyDb): Promise<FinanceData> {
       dueDate: e.dueDate,
       status: e.status,
       contractId: e.contractId,
+      productId: e.productId,
     })),
     movements: movements.map((m) => ({
       accountId: m.accountId,
@@ -136,6 +138,7 @@ export async function loadFinanceData(db: AnyDb): Promise<FinanceData> {
       status: m.status,
       canceledOn: m.canceledOn,
       accessUntil: m.accessUntil,
+      invitedBy: m.invitedBy,
     })),
     memberEvents: memberEvents.map((e) => ({ memberId: e.memberId, date: e.eventDate, type: e.type, mrrDeltaCents: e.mrrDeltaCents })),
     operationsStart: typeof opsStart?.value === "string" ? opsStart.value : null,

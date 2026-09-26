@@ -92,6 +92,13 @@
       "when": 1790403079750,
       "tag": "0012_informe_mensual",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790403888153,
+      "tag": "0013_productos_afiliados",
+      "breakpoints": true
     }
   ]
 }

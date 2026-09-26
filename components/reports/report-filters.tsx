@@ -13,6 +13,7 @@ const REPORTS = [
   { value: "resultados", label: "Estado de resultados" },
   { value: "flujo", label: "Flujo de efectivo" },
   { value: "balance", label: "Balance general" },
+  { value: "productos", label: "Productos y afiliados" },
 ];
 
 export function ReportTabs({ report }: { report: string }) {

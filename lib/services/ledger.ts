@@ -110,6 +110,7 @@ export type ExpenseInput = {
   subscriptionId?: string | null;
   contractId?: string | null;
   debtId?: string | null;
+  productId?: string | null;
   notes: string | null;
   createdBy?: string | null;
 };
@@ -198,6 +199,7 @@ export type RevenueInput = {
   status: "pending" | "available" | "paid_out" | "refunded" | "disputed";
   depositAccountId: string | null;
   memberId?: string | null;
+  affiliateName?: string | null;
   notes: string | null;
   createdBy?: string | null;
 };

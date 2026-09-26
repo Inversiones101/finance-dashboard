@@ -193,14 +193,15 @@ export async function saveOperationsStartAction(_: ActionResult | null, form: Fo
 const feeSchema = z.object({
   pct: z.preprocess((v) => (v === "" || v === undefined ? null : String(v).replace(",", ".")), z.coerce.number().min(0).max(50).nullable()),
   fixedCents: zOptMoney,
+  affiliatePct: z.preprocess((v) => (v === "" || v === undefined ? null : String(v).replace(",", ".")), z.coerce.number().min(0).max(90).nullable()),
 });
 
 export async function saveSkoolFeeAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   const p = parseForm(feeSchema, form);
   if (!p.data) return fail(p.error);
-  const { pct, fixedCents } = p.data;
+  const { pct, fixedCents, affiliatePct } = p.data;
   return mutate("settings", "admin", "settings", "update", async (tx) => {
-    await saveSkoolFee(tx, pct === null ? null : { pct, fixedCents });
+    await saveSkoolFee(tx, pct === null ? null : { pct, fixedCents, affiliatePct });
     return { message: pct === null ? "Sin comisión de Skool" : `Comisión de Skool: ${pct}%${fixedCents ? ` + $${(fixedCents / 100).toFixed(2)}` : ""} por cobro` };
   });
 }

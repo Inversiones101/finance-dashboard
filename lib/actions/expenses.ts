@@ -20,6 +20,7 @@ const schema = z.object({
   paidOn: zOptDate,
   subscriptionId: zOptId,
   contractId: zOptId,
+  productId: zOptId,
   notes: zOptText,
 });
 

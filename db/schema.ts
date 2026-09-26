@@ -413,6 +413,8 @@ export const members = pgTable(
     name: text("name").notNull(),
     /** Correo en Skool: llave para importar el CSV sin duplicar (el nombre es el respaldo). */
     email: text("email"),
+    /** Quién lo invitó (afiliado), según el CSV de Skool. */
+    invitedBy: text("invited_by"),
     productId: uuid("product_id").notNull().references(() => products.id),
     billingInterval: billingIntervalEnum("billing_interval").notNull(),
     currency: currencyEnum("currency").notNull().default("USD"),
@@ -476,6 +478,8 @@ export const revenues = pgTable(
     grossCents: cents("gross_cents").notNull(),
     processorFeeCents: cents("processor_fee_cents").notNull().default(0), // comisión Skool/Stripe
     affiliateFeeCents: cents("affiliate_fee_cents").notNull().default(0),
+    /** Afiliado que refirió la venta (en Skool, "Invited By"). La comisión la paga la plataforma. */
+    affiliateName: text("affiliate_name"),
     netCents: cents("net_cents")
       .notNull()
       .generatedAlwaysAs(sql`gross_cents - processor_fee_cents - affiliate_fee_cents`),
@@ -598,6 +602,8 @@ export const expenses = pgTable(
     vendorId: uuid("vendor_id").references(() => counterparties.id),
     description: text("description").notNull(), // "Loom Suscripción", "Diseños I101"
     categoryId: uuid("category_id").notNull().references(() => categories.id), // kind cogs|opex
+    /** Producto al que corresponde (publicidad de un curso, herramienta de una mentoría…). Vacío = gasto general. */
+    productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
     frequency: billingIntervalEnum("frequency").notNull().default("one_time"), // recurrente vs único
     subscriptionId: uuid("subscription_id").references(() => subscriptions.id, { onDelete: "set null" }),
     debtId: uuid("debt_id").references(() => debts.id, { onDelete: "set null" }), // gasto financiado en cuotas

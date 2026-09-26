@@ -18,6 +18,7 @@ type ExpenseDefaults = Partial<{
   paidOn: string | null;
   subscriptionId: string | null;
   contractId: string | null;
+  productId: string | null;
   notes: string | null;
 }>;
 
@@ -34,6 +35,14 @@ export function ExpenseFields({ o, d = {}, today }: { o: FormOptions; d?: Expens
         <TextField label="Fecha del cargo" name="expenseDate" type="date" defaultValue={d.expenseDate ?? today} required />
         <SelectField label="Categoría" name="categoryId" options={o.expenseCategories} defaultValue={d.categoryId} placeholder="Elige…" required />
       </FieldRow>
+      <SelectField
+        label="¿De qué producto?"
+        name="productId"
+        options={o.productOptions}
+        defaultValue={d.productId}
+        placeholder="General (no es de un producto)"
+        hint="Opcional. Ej. publicidad de un curso. Sirve para ver la rentabilidad de cada producto en Reportes."
+      />
       <FieldRow>
         <MoneyField label="Monto" name="amountCents" defaultCents={d.amountCents} required />
         <SelectField label="Moneda" name="currency" options={CURRENCY_OPTIONS} defaultValue={d.currency ?? "USD"} />

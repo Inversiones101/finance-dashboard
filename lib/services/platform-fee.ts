@@ -6,19 +6,22 @@ import { and, eq, sql } from "drizzle-orm";
 import * as s from "@/db/schema";
 import { syncRevenue, type Tx } from "./ledger";
 
-export type PlatformFee = { pct: number; fixedCents: number };
+/** `affiliatePct`: comisión que Skool le paga al afiliado (se descuenta de tu cobro). */
+export type PlatformFee = { pct: number; fixedCents: number; affiliatePct?: number | null };
 const KEY = "platform_fee_skool";
 
 export async function getSkoolFee(tx: Tx): Promise<PlatformFee | null> {
   const [row] = await tx.select().from(s.settings).where(eq(s.settings.key, KEY));
   const v = row?.value as Partial<PlatformFee> | undefined;
-  return v && typeof v.pct === "number" ? { pct: v.pct, fixedCents: v.fixedCents ?? 0 } : null;
+  return v && typeof v.pct === "number" ? { pct: v.pct, fixedCents: v.fixedCents ?? 0, affiliatePct: v.affiliatePct ?? null } : null;
 }
 
 export async function saveSkoolFee(tx: Tx, fee: PlatformFee | null) {
   if (!fee) return tx.delete(s.settings).where(eq(s.settings.key, KEY));
   await tx.insert(s.settings).values({ key: KEY, value: fee }).onConflictDoUpdate({ target: s.settings.key, set: { value: fee, updatedAt: new Date() } });
 }
+
+export const affiliateFeeFor = (grossCents: number, fee: PlatformFee | null) => (fee?.affiliatePct ? Math.round((grossCents * fee.affiliatePct) / 100) : 0);
 
 export const feeFor = (grossCents: number, fee: PlatformFee | null) => (fee ? Math.min(grossCents, Math.round((grossCents * fee.pct) / 100) + fee.fixedCents) : 0);
 

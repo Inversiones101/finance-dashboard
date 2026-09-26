@@ -3,12 +3,15 @@ import { requirePage } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { MonthClosePanel } from "@/components/reports/month-close-panel";
 import { AccountantPackage } from "@/components/reports/accountant-package";
+import { ProductsReport } from "@/components/reports/products-report";
 import { getDb } from "@/db/client";
 import { loadFinanceData } from "@/lib/data/finance-data";
 import {
   CASHFLOW_ROWS,
   PNL_ROWS,
+  computeAffiliates,
   computeBalanceSheet,
+  computeProductReport,
   computeCashFlow,
   computePnlReport,
   type Granularity,
@@ -66,7 +69,7 @@ function Line({ label, value, money, strong, indent, out }: { label: string; val
 export default async function ReportesPage({ searchParams }: PageProps<"/reportes">) {
   const user = await requirePage("reports");
   const q = await searchParams;
-  const report = q.reporte === "flujo" || q.reporte === "balance" ? q.reporte : "resultados";
+  const report = q.reporte === "flujo" || q.reporte === "balance" || q.reporte === "productos" ? q.reporte : "resultados";
   const view = typeof q.vista === "string" && VIEW_TO_G[q.vista] ? q.vista : "mes";
   const granularity = VIEW_TO_G[view];
   const today = todayIn();
@@ -252,6 +255,19 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                 </Table>
               </div>
             </Panel>
+          );
+        })()}
+
+      {report === "productos" &&
+        (() => {
+          const period = { from: `${range.from}-01`, to: range.to >= currentMonth ? today : lastDay(range.to) };
+          return (
+            <ProductsReport
+              products={computeProductReport(data, period)}
+              affiliates={computeAffiliates(data, { ...period, asOf: today })}
+              money={money}
+              period={`Del ${period.from} al ${period.to}`}
+            />
           );
         })()}
 

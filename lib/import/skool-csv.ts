@@ -14,6 +14,7 @@ export type SkoolRow = {
   interval: Interval | null; // null = miembro gratis
   priceCents: number; // 0 = gratis
   ltvCents: number;
+  invitedBy: string | null; // afiliado que lo refirió ("Invited By")
 };
 
 /** Cobros de prueba ($1) y diferencias de centavos no son ingresos reales. */
@@ -65,6 +66,7 @@ export function parseSkoolCsv(text: string): { rows: SkoolRow[]; error: string |
   if (!header) return { rows: [], error: "El archivo está vacío." };
   const col = (name: string) => header.findIndex((h) => h.trim().toLowerCase() === name.toLowerCase());
   const idx = { first: col("FirstName"), last: col("LastName"), email: col("Email"), joined: col("JoinedDate"), price: col("Price"), interval: col("Recurring Interval"), ltv: col("LTV") };
+  const invitedCol = col("Invited By"); // opcional
   const missing = Object.entries(idx).filter(([, i]) => i < 0).map(([k]) => k);
   if (missing.length) return { rows: [], error: "No parece el export de miembros de Skool (faltan columnas: FirstName, LastName, Email, JoinedDate, Price, Recurring Interval o LTV)." };
 
@@ -83,6 +85,7 @@ export function parseSkoolCsv(text: string): { rows: SkoolRow[]; error: string |
       interval: paying ? interval : null,
       priceCents: paying ? priceCents : 0,
       ltvCents: money(r[idx.ltv]),
+      invitedBy: invitedCol >= 0 ? (r[invitedCol] ?? "").trim() || null : null,
     });
   }
   return { rows, error: rows.length ? null : "El archivo no tiene miembros." };

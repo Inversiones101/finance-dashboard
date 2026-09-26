@@ -174,6 +174,9 @@ export default async function CatalogosPage() {
                   <TextField label="Porcentaje por cobro" name="pct" type="number" defaultValue={skoolFee?.pct} hint="Ej. 2.9. Vacío = sin comisión." />
                   <MoneyField label="Monto fijo por cobro" name="fixedCents" defaultCents={skoolFee?.fixedCents} hint="Ej. 0.30" />
                 </FieldRow>
+                <div className="max-w-xs">
+                  <TextField label="Comisión de afiliados (%)" name="affiliatePct" type="number" defaultValue={skoolFee?.affiliatePct} hint="La que Skool le paga al afiliado de tu comunidad. Se aplica a los cobros de miembros con “Invited By”. Vacío = sin programa." />
+                </div>
               </InlineForm>
             ) : (
               <p className="text-sm">{skoolFee ? `${skoolFee.pct}% + ${formatMoney(skoolFee.fixedCents)}` : "Sin definir"}</p>

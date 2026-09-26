@@ -48,6 +48,7 @@ export type FinanceData = {
     fxRateToUsd: number;
     status: "pending" | "available" | "paid_out" | "refunded" | "disputed";
     depositAccountId?: string | null;
+    affiliateName?: string | null;
   }[];
   expenses: {
     date: string;
@@ -60,6 +61,7 @@ export type FinanceData = {
     dueDate: string | null;
     status: "pending" | "paid" | "financed" | "void";
     contractId: string | null;
+    productId?: string | null;
   }[];
   movements: {
     accountId: string;
@@ -122,6 +124,7 @@ export type Member = {
   status: "active" | "canceled";
   canceledOn: string | null;
   accessUntil: string | null;
+  invitedBy?: string | null;
 };
 
 export type MemberEvent = { memberId: string; date: string; type: "new" | "change" | "cancel" | "reactivate"; mrrDeltaCents: number };
@@ -495,6 +498,91 @@ export function computeCommunity(data: FinanceData, opts: EngineOptions & { look
     cohorts,
     mix,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rentabilidad por producto y afiliados
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Por producto: ventas, bruto, comisiones, ingreso neto, costos asignados (gastos con ese
+ * producto) y contribución. Lo no asignado queda en "Gastos generales" para que cuadre con el P&L.
+ * La puesta en marcha no entra (es capital inicial). `from`/`to` son fechas YYYY-MM-DD.
+ */
+export function computeProductReport(data: FinanceData, { from, to }: { from: string; to: string }) {
+  const inRange = (d: string) => d >= from && d <= to;
+  const revenues = data.revenues.filter((r) => r.status !== "refunded" && r.status !== "disputed" && inRange(r.date));
+  const expenses = data.expenses.filter(
+    (e) => e.status !== "void" && inRange(e.date) && !(data.operationsStart && e.fundingSource === "owner_personal" && e.date < data.operationsStart)
+  );
+  const name = new Map(data.products.map((p) => [p.id, p.name]));
+  const rows = new Map<string, { productId: string | null; name: string; sales: number; gross: number; fees: number; affiliate: number; costs: number }>();
+  const row = (id: string | null) => {
+    const key = id ?? "";
+    if (!rows.has(key)) rows.set(key, { productId: id, name: id ? (name.get(id) ?? "Producto eliminado") : "Sin producto", sales: 0, gross: 0, fees: 0, affiliate: 0, costs: 0 });
+    return rows.get(key)!;
+  };
+  for (const r of revenues) {
+    const x = row(r.productId);
+    x.sales++;
+    x.gross += usd(r.grossCents, r.fxRateToUsd);
+    x.fees += usd(r.processorFeeCents, r.fxRateToUsd);
+    x.affiliate += usd(r.affiliateFeeCents, r.fxRateToUsd);
+  }
+  let general = 0;
+  for (const e of expenses) {
+    const v = usd(e.amountCents, e.fxRateToUsd);
+    if (e.productId) row(e.productId).costs += v;
+    else general += v;
+  }
+  const products = [...rows.values()]
+    .map((x) => {
+      const net = x.gross - x.fees - x.affiliate;
+      const contribution = net - x.costs;
+      return {
+        productId: x.productId,
+        name: x.name,
+        sales: x.sales,
+        gross: toDollars(x.gross),
+        fees: toDollars(x.fees),
+        affiliate: toDollars(x.affiliate),
+        net: toDollars(net),
+        costs: toDollars(x.costs),
+        contribution: toDollars(contribution),
+        margin: net > 0 ? contribution / net : null,
+      };
+    })
+    .sort((a, b) => b.net - a.net);
+  const totalContribution = sum(products.map((p) => p.contribution * 100));
+  return { products, generalCosts: toDollars(general), result: toDollars(totalContribution - general) };
+}
+
+/** Por afiliado: miembros referidos (activos y totales), ventas que trajeron y comisiones que ganaron. */
+export function computeAffiliates(data: FinanceData, { from, to, asOf }: { from: string; to: string; asOf: string }) {
+  const key = (s: string) => s.trim().toLowerCase();
+  const out = new Map<string, { name: string; referred: number; active: number; mrr: number; gross: number; commissions: number }>();
+  const get = (n: string) => {
+    if (!out.has(key(n))) out.set(key(n), { name: n.trim(), referred: 0, active: 0, mrr: 0, gross: 0, commissions: 0 });
+    return out.get(key(n))!;
+  };
+  for (const m of data.members ?? []) {
+    if (!m.invitedBy?.trim()) continue;
+    const a = get(m.invitedBy);
+    a.referred++;
+    if (memberCountsOn(m, asOf)) {
+      a.active++;
+      a.mrr += m.billingInterval === "one_time" ? 0 : m.priceCents / INTERVAL_MONTHS[m.billingInterval];
+    }
+  }
+  for (const r of data.revenues) {
+    if (!r.affiliateName?.trim() || r.status === "refunded" || r.status === "disputed" || r.date < from || r.date > to) continue;
+    const a = get(r.affiliateName);
+    a.gross += usd(r.grossCents, r.fxRateToUsd);
+    a.commissions += usd(r.affiliateFeeCents, r.fxRateToUsd);
+  }
+  return [...out.values()]
+    .map((a) => ({ ...a, mrr: toDollars(a.mrr), gross: toDollars(a.gross), commissions: toDollars(a.commissions), costPct: a.gross ? a.commissions / a.gross : null }))
+    .sort((a, b) => b.gross - a.gross || b.referred - a.referred);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
