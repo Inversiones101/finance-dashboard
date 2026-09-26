@@ -1,4 +1,4 @@
-import { and, desc, gte, inArray, lte } from "drizzle-orm";
+import { and, desc, gte, inArray, lte, ne, or } from "drizzle-orm";
 import { Briefcase, CalendarClock, Package, Plus, Receipt } from "lucide-react";
 import { getDb } from "@/db/client";
 import * as s from "@/db/schema";
@@ -17,6 +17,8 @@ import { MonthFilter } from "@/components/crud/month-filter";
 import { FormDialog } from "@/components/crud/form-dialog";
 import { RowActions } from "@/components/crud/row-actions";
 import { ReceiptsButton } from "@/components/expenses/receipts-button";
+import { operationsStart } from "@/lib/services/startup-costs";
+import type { Tx } from "@/lib/services/ledger";
 import { StatusBadge } from "@/components/crud/status-badge";
 import { ExpenseFields } from "@/components/forms/expense-fields";
 
@@ -27,12 +29,15 @@ export default async function GastosPage({ searchParams }: PageProps<"/gastos">)
   const today = todayIn();
 
   const db = await getDb();
+  const start = await operationsStart(db as unknown as Tx);
+  // La puesta en marcha (pagada por el dueño antes de operar) es aporte de capital: vive en Capital del dueño.
+  const notStartup = start ? or(ne(s.expenses.fundingSource, "owner_personal"), gte(s.expenses.expenseDate, start)) : undefined;
   const [o, rows] = await Promise.all([
     getFormOptions(),
     db
       .select()
       .from(s.expenses)
-      .where(month ? and(gte(s.expenses.expenseDate, monthRange(month).from), lte(s.expenses.expenseDate, monthRange(month).to)) : undefined)
+      .where(and(notStartup, month ? and(gte(s.expenses.expenseDate, monthRange(month).from), lte(s.expenses.expenseDate, monthRange(month).to)) : undefined))
       .orderBy(desc(s.expenses.expenseDate), desc(s.expenses.createdAt)),
   ]);
 

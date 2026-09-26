@@ -986,7 +986,7 @@ export const PNL_ROWS = [
   { key: "ebit", label: "EBIT (utilidad operativa)", strong: true },
   { key: "interest", label: "− Intereses y costos financieros", out: true, detail: "interestByCategory" },
   { key: "other", label: "± Otros ingresos y gastos", detail: "otherByType" },
-  { key: "preOperating", label: "− Gastos de puesta en marcha (capital inicial)", out: true, detail: "preOperatingByCategory" },
+  { key: "preOperating", label: "− Puesta en marcha (cubierta con capital inicial)", out: true, detail: "preOperatingByCategory" },
   { key: "ebt", label: "Utilidad antes de impuestos", strong: true },
   { key: "taxes", label: "− Impuestos sobre la renta", out: true },
   { key: "netProfit", label: "Utilidad neta", strong: true },

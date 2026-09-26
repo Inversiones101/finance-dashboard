@@ -7,7 +7,9 @@ import { getFormOptions } from "@/lib/data/options";
 import { todayIn } from "@/lib/today";
 import { formatDate, formatMoney } from "@/lib/format";
 import { CURRENCY_OPTIONS, OWNER_ENTRY, toOptions } from "@/lib/labels";
-import { deleteOwnerEntryAction, saveOwnerEntryAction } from "@/lib/actions/owner";
+import { deleteOwnerEntryAction, deleteStartupCostAction, saveOwnerEntryAction, saveStartupCostAction } from "@/lib/actions/owner";
+import { listStartupCosts } from "@/lib/services/startup-costs";
+import type { Tx } from "@/lib/services/ledger";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader, Panel, Empty, StatPill } from "@/components/crud/page-header";
@@ -22,7 +24,15 @@ export default async function PropietarioPage() {
   const canWrite = true;
   const today = todayIn();
   const db = await getDb();
-  const [o, rows] = await Promise.all([getFormOptions(), db.select().from(s.ownerLedger).orderBy(desc(s.ownerLedger.entryDate), desc(s.ownerLedger.createdAt))]);
+  const [o, rows, startup, contracts] = await Promise.all([
+    getFormOptions(),
+    db.select().from(s.ownerLedger).orderBy(desc(s.ownerLedger.entryDate), desc(s.ownerLedger.createdAt)),
+    listStartupCosts(db as unknown as Tx),
+    db.select({ id: s.vendorContracts.id, name: s.vendorContracts.name, status: s.vendorContracts.status }).from(s.vendorContracts),
+  ]);
+  const startupTotal = startup.rows.reduce((a, e) => a + Math.round(e.amountCents * Number(e.fxRateToUsd)), 0);
+  const startupIds = new Set(startup.rows.map((e) => e.id));
+  const dayBefore = startup.start ? new Date(Date.parse(`${startup.start}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10) : today;
 
   const usd = (r: (typeof rows)[number]) => Math.round(r.amountCents * Number(r.fxRateToUsd));
   const sumType = (t: keyof typeof OWNER_ENTRY) => rows.filter((r) => r.type === t).reduce((a, r) => a + usd(r), 0);
@@ -65,7 +75,68 @@ export default async function PropietarioPage() {
         <StatPill label="Préstamos a la LLC" value={formatMoney(owed)} icon={Scale} />
       </div>
 
-      <Panel>
+      <Panel
+        title="Puesta en marcha · capital inicial"
+        description={
+          startup.start
+            ? `Lo que pagaste de tu bolsillo antes del inicio de operaciones (${formatDate(startup.start)}). Cuenta como aporte de capital, no como gasto: no aparece en Gastos ni afecta utilidad bruta, EBITDA, márgenes, burn o presupuestos. Desde esa fecha, todo gasto de la empresa se registra normal en Gastos.`
+            : "Define la fecha de inicio de operaciones en Catálogos → Empresa."
+        }
+        actions={
+          canWrite && startup.start ? (
+            <FormDialog
+              title="Pago de puesta en marcha"
+              description="Algo que pagaste tú antes de que la LLC empezara a operar. Se suma a tu capital inicial."
+              action={saveStartupCostAction}
+              submitLabel="Sumar al capital inicial"
+              trigger={<Button variant="outline" size="sm"><Plus className="size-4" /> Agregar</Button>}
+            >
+              <FieldRow>
+                <TextField label="Fecha" name="date" type="date" defaultValue={dayBefore} required hint={`Antes del ${formatDate(startup.start)}.`} />
+                <MoneyField label="Monto" name="amountCents" required />
+              </FieldRow>
+              <SelectField label="¿Es cuota de un contrato?" name="contractId" options={contracts.filter((c) => c.status !== "canceled").map((c) => ({ value: c.id, label: c.name }))} placeholder="No" hint="Si lo es, baja lo que queda por pagar del contrato." />
+              <FieldRow>
+                <SelectField label="Categoría" name="categoryId" options={o.expenseCategories} placeholder="(la del contrato)" />
+                <SelectField label="Moneda" name="currency" options={CURRENCY_OPTIONS} defaultValue="USD" />
+              </FieldRow>
+              <TextField label="Concepto" name="description" placeholder="Ej. Cuota 2 · Consultoría Skool Scaling" hint="Vacío con contrato = “Cuota N · contrato”." />
+            </FormDialog>
+          ) : undefined
+        }
+      >
+        {startup.rows.length === 0 ? (
+          <Empty>Sin pagos de puesta en marcha.</Empty>
+        ) : (
+          <>
+            <ul className="divide-y">
+              {startup.rows.map((e) => (
+                <li key={e.id} className="flex items-center gap-3 py-2 text-sm">
+                  <span className="w-24 shrink-0 text-muted-foreground">{formatDate(e.expenseDate)}</span>
+                  <span className="min-w-0 flex-1 truncate">{e.description}</span>
+                  <span className="font-medium tabular">{formatMoney(e.amountCents, e.currency)}</span>
+                  {canWrite && (
+                    <ConfirmButton
+                      title="¿Quitar de la puesta en marcha?"
+                      description="Se quita del capital inicial (y, si era cuota de un contrato, vuelve a quedar pendiente)."
+                      destructive
+                      confirmLabel="Quitar"
+                      action={deleteStartupCostAction.bind(null, e.id)}
+                      trigger={<Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-danger" aria-label="Quitar"><Trash2 className="size-3.5" /></Button>}
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 flex justify-between border-t pt-2 text-sm font-semibold">
+              <span>Total puesta en marcha</span>
+              <span className="tabular">{formatMoney(startupTotal)}</span>
+            </p>
+          </>
+        )}
+      </Panel>
+
+      <Panel title="Todos los movimientos">
         {rows.length === 0 ? (
           <Empty>Sin movimientos.</Empty>
         ) : (
@@ -94,7 +165,7 @@ export default async function PropietarioPage() {
                       <TableCell>
                         <StatusBadge label={OWNER_ENTRY[r.type]} tone={outflow ? "warn" : "good"} />
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{auto ? (r.expenseId ? "Automático · gasto" : r.revenueId ? "Automático · ingreso" : "Automático · pago de deuda") : "Manual"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{auto ? (r.expenseId ? (startupIds.has(r.expenseId) ? "Automático · puesta en marcha" : "Automático · gasto pagado por ti") : r.revenueId ? "Automático · ingreso" : "Automático · pago de deuda") : "Manual"}</TableCell>
                       <TableCell className={cn("text-right font-medium whitespace-nowrap tabular", outflow ? "text-money-out-text" : "")}>
                         {formatMoney(r.amountCents, r.currency)}
                       </TableCell>

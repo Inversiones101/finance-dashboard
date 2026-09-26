@@ -288,7 +288,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                     <Line label="Capital social (aportes del dueño)" value={b.equity.capital} money={money} indent />
                     {b.equity.openingBalances !== 0 && <Line label="Saldos iniciales de cuentas" value={b.equity.openingBalances} money={money} indent />}
                     <Line label="Resultado de operación acumulado" value={b.equity.retained} money={money} indent />
-                    {b.equity.preOperating !== 0 && <Line label="Gastos de puesta en marcha" value={-b.equity.preOperating} money={money} indent />}
+                    {b.equity.preOperating !== 0 && <Line label="Puesta en marcha (capital inicial usado)" value={-b.equity.preOperating} money={money} indent />}
                     <Line label="Retiros del dueño" value={-b.equity.draws} money={money} indent />
                     <Line label="Total patrimonio" value={b.equity.total} money={money} strong />
                   </Panel>
