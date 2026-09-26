@@ -24,20 +24,59 @@ export type SessionUser = {
   permissions: Permissions;
 };
 
-/** Crea la sesión: en la cookie va un token aleatorio; en la BD, solo su hash. */
-export async function createSession(userId: string, meta: { userAgent?: string | null; ip?: string | null } = {}) {
-  const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 86_400_000);
-  const db = await getDb();
-  await db.insert(s.sessions).values({ userId, tokenHash: hashToken(token), expiresAt, userAgent: meta.userAgent ?? null, ip: meta.ip ?? null });
-  await db.update(s.users).set({ lastLoginAt: new Date() }).where(eq(s.users.id, userId));
+const MFA_MINUTES = 10;
+
+async function setCookie(token: string, expires: Date) {
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    expires: expiresAt,
+    expires,
   });
+}
+
+/**
+ * Crea la sesión: en la cookie va un token aleatorio; en la BD, solo su hash.
+ * Con `mfaPending`, la sesión no da acceso a nada hasta que se verifique el código (10 min).
+ */
+export async function createSession(userId: string, meta: { userAgent?: string | null; ip?: string | null } = {}, { mfaPending = false } = {}) {
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + (mfaPending ? MFA_MINUTES * 60_000 : SESSION_DAYS * 86_400_000));
+  const db = await getDb();
+  await db.insert(s.sessions).values({ userId, tokenHash: hashToken(token), expiresAt, userAgent: meta.userAgent ?? null, ip: meta.ip ?? null, mfaPending, lastSeenAt: new Date() });
+  if (!mfaPending) await db.update(s.users).set({ lastLoginAt: new Date() }).where(eq(s.users.id, userId));
+  await setCookie(token, expiresAt);
+}
+
+/** Sesión a medio camino (contraseña correcta, falta el código). */
+export async function getPendingMfaSession() {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  const db = await getDb();
+  const [row] = await db
+    .select({ session: s.sessions, user: s.users })
+    .from(s.sessions)
+    .innerJoin(s.users, eq(s.users.id, s.sessions.userId))
+    .where(and(eq(s.sessions.tokenHash, hashToken(token)), eq(s.sessions.mfaPending, true), gt(s.sessions.expiresAt, new Date()), eq(s.users.isActive, true)));
+  return row ?? null;
+}
+
+/** Código correcto: la sesión pasa a ser normal (30 días). */
+export async function completeMfaSession(sessionId: string, userId: string) {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!token) throw new Error("La sesión expiró. Vuelve a iniciar sesión.");
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 86_400_000);
+  const db = await getDb();
+  await db.update(s.sessions).set({ mfaPending: false, expiresAt, lastSeenAt: new Date() }).where(eq(s.sessions.id, sessionId));
+  await db.update(s.users).set({ lastLoginAt: new Date() }).where(eq(s.users.id, userId));
+  await setCookie(token, expiresAt);
+}
+
+/** Hash del token de la sesión actual (para marcar "este dispositivo" en la lista de sesiones). */
+export async function currentSessionHash() {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  return token ? hashToken(token) : null;
 }
 
 export async function destroySession() {
@@ -56,12 +95,16 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   if (!token) return null;
   const db = await getDb();
   const [row] = await db
-    .select({ user: s.users, role: s.roles })
+    .select({ user: s.users, role: s.roles, session: s.sessions })
     .from(s.sessions)
     .innerJoin(s.users, eq(s.users.id, s.sessions.userId))
     .innerJoin(s.roles, eq(s.roles.id, s.users.roleId))
-    .where(and(eq(s.sessions.tokenHash, hashToken(token)), gt(s.sessions.expiresAt, new Date()), eq(s.users.isActive, true)));
+    .where(and(eq(s.sessions.tokenHash, hashToken(token)), eq(s.sessions.mfaPending, false), gt(s.sessions.expiresAt, new Date()), eq(s.users.isActive, true)));
   if (!row) return null;
+  // "Última actividad" para la lista de sesiones, sin escribir en cada request.
+  if (!row.session.lastSeenAt || Date.now() - row.session.lastSeenAt.getTime() > 15 * 60_000) {
+    await db.update(s.sessions).set({ lastSeenAt: new Date() }).where(eq(s.sessions.id, row.session.id));
+  }
 
   const perms = await db.select().from(s.rolePermissions).where(eq(s.rolePermissions.roleId, row.role.id));
   const level = (m: Module) => perms.find((p) => p.module === m)?.level;

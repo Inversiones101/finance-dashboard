@@ -9,7 +9,7 @@ import { NAV_GROUPS } from "./nav-items";
 
 export function NavList({ permissions, onNavigate, collapsed }: { permissions: Permissions; onNavigate?: () => void; collapsed?: boolean }) {
   const pathname = usePathname();
-  const groups = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => can(permissions, i.module)) })).filter((g) => g.items.length);
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => can(permissions, i.module, i.level ?? "read")) })).filter((g) => g.items.length);
 
   return (
     <nav className={cn("flex flex-col gap-5 py-4", collapsed ? "items-center px-2" : "px-3")}>

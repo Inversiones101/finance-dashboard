@@ -24,6 +24,7 @@ import {
   backfillSkoolFeesAction,
 } from "@/lib/actions/catalogs";
 import { InlineForm } from "@/components/profile/inline-form";
+import { BackupsPanel } from "@/components/profile/backups-panel";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -178,6 +179,7 @@ export default async function CatalogosPage() {
               <p className="text-sm">{skoolFee ? `${skoolFee.pct}% + ${formatMoney(skoolFee.fixedCents)}` : "Sin definir"}</p>
             )}
           </Panel>
+          {can(user.permissions, "users", "admin") && <BackupsPanel />}
         </TabsContent>
 
         <TabsContent value="productos">

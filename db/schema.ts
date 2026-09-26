@@ -216,6 +216,12 @@ export const users = pgTable(
     dashboardPrefs: jsonb("dashboard_prefs"),
     preferredTheme: varchar("preferred_theme", { length: 10 }).default("system"), // light | dark | system
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    /** Verificación en dos pasos (TOTP). El secreto va cifrado con APP_SECRET (AES-256-GCM). */
+    totpSecretEnc: text("totp_secret_enc"),
+    totpEnabledAt: timestamp("totp_enabled_at", { withTimezone: true }), // null = aún no activada
+    totpLastStep: integer("totp_last_step"), // evita reusar el mismo código
+    /** Hashes SHA-256 de los códigos de recuperación que aún no se han usado. */
+    recoveryCodes: jsonb("recovery_codes"),
     ...timestamps,
   },
   (t) => [uniqueIndex("users_email_lower_idx").on(sql`lower(${t.email})`)]
@@ -231,9 +237,25 @@ export const sessions = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     userAgent: text("user_agent"),
     ip: varchar("ip", { length: 64 }),
+    /** Contraseña correcta pero falta el código de dos pasos: la sesión aún no da acceso. */
+    mfaPending: boolean("mfa_pending").notNull().default(false),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("sessions_user_idx").on(t.userId)]
+);
+
+/** Intentos de inicio de sesión: base del freno a la fuerza bruta (funciona entre servidores). */
+export const loginAttempts = pgTable(
+  "login_attempts",
+  {
+    id: id(),
+    email: text("email").notNull(),
+    ip: varchar("ip", { length: 64 }),
+    success: boolean("success").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("login_attempts_email_idx").on(t.email, t.createdAt)]
 );
 
 /** Bitácora: quién creó / cambió / borró qué. Imprescindible en un ERP financiero. */
@@ -242,7 +264,7 @@ export const auditLog = pgTable(
   {
     id: id(),
     userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
-    action: varchar("action", { length: 20 }).notNull(), // create | update | delete | login | reconcile
+    action: varchar("action", { length: 40 }).notNull(), // create | update | delete | login | reconcile…
     entity: varchar("entity", { length: 60 }).notNull(),
     entityId: uuid("entity_id"),
     diff: jsonb("diff"),
@@ -797,3 +819,22 @@ export const classificationRules = pgTable("classification_rules", {
   description: text("description"),
   ...timestamps,
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Adjuntos (recibos y facturas) — el archivo vive en Vercel Blob privado
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const expenseAttachments = pgTable(
+  "expense_attachments",
+  {
+    id: id(),
+    expenseId: uuid("expense_id").notNull().references(() => expenses.id, { onDelete: "cascade" }),
+    blobPath: text("blob_path").notNull(), // pathname en Vercel Blob (privado); se sirve por /api/adjuntos/[id]
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    uploadedBy: createdBy(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("expense_attachments_expense_idx").on(t.expenseId)]
+);

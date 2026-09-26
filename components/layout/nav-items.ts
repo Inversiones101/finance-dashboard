@@ -14,6 +14,7 @@ import {
   PiggyBank,
   Target,
   LineChart,
+  History,
   type LucideIcon,
 } from "lucide-react";
 
@@ -23,6 +24,8 @@ export type NavItem = {
   label: string;
   icon: LucideIcon;
   module: Module;
+  /** Nivel mínimo para ver el enlace (por defecto, lectura). */
+  level?: "read" | "write" | "admin";
 };
 
 /** Finanzas primero; la comunidad (miembros) va aparte, más abajo. */
@@ -68,6 +71,7 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/catalogos", label: "Catálogos", icon: Shapes, module: "settings" },
       { href: "/usuarios", label: "Usuarios", icon: UserCog, module: "users" },
+      { href: "/historial", label: "Historial", icon: History, module: "users", level: "admin" },
     ],
   },
 ];

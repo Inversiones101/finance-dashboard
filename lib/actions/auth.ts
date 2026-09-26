@@ -8,12 +8,10 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import * as s from "@/db/schema";
 import { hashPassword, verifyPassword, PASSWORD_MIN_LENGTH } from "@/lib/auth/password";
-import { createSession, destroySession } from "@/lib/auth/session";
-import { audit } from "@/lib/services/ledger";
+import { completeMfaSession, createSession, destroySession, getPendingMfaSession } from "@/lib/auth/session";
+import { audit, type Tx } from "@/lib/services/ledger";
+import { checkSecondFactor, isThrottled, recordAttempt } from "@/lib/services/security";
 import { fail, type ActionResult } from "./result";
-
-// Freno simple a ataques de fuerza bruta: 5 intentos fallidos por correo ⇒ 5 minutos de espera.
-const failures = new Map<string, { n: number; until: number }>();
 
 function safeNext(next: FormDataEntryValue | null) {
   const v = typeof next === "string" ? next : "";
@@ -30,21 +28,44 @@ export async function login(_: ActionResult | null, form: FormData): Promise<Act
   const password = String(form.get("password") ?? "");
   if (!email || !password) return fail("Escribe tu correo y contraseña.");
 
-  const f = failures.get(email);
-  if (f && f.until > Date.now()) return fail("Demasiados intentos. Espera unos minutos.");
-
   const db = await getDb();
+  const tx = db as unknown as Tx;
+  const meta = await requestMeta();
+  // Freno a la fuerza bruta guardado en la base: funciona aunque Vercel use varios servidores.
+  if (await isThrottled(tx, email, meta.ip)) return fail("Demasiados intentos. Espera 15 minutos e inténtalo de nuevo.");
+
   const [user] = await db.select().from(s.users).where(eq(sql`lower(${s.users.email})`, email));
   const valid = user && user.isActive && (await verifyPassword(password, user.passwordHash));
-  if (!valid) {
-    const n = (f?.n ?? 0) + 1;
-    failures.set(email, { n, until: n >= 5 ? Date.now() + 5 * 60_000 : 0 });
-    return fail("Correo o contraseña incorrectos.");
-  }
+  await recordAttempt(tx, email, meta.ip, !!valid);
+  if (!valid) return fail("Correo o contraseña incorrectos.");
 
-  failures.delete(email);
-  await createSession(user.id, await requestMeta());
+  const next = safeNext(form.get("next"));
+  if (user.totpEnabledAt) {
+    // Contraseña correcta: falta el código. La sesión no da acceso hasta verificarlo.
+    await createSession(user.id, meta, { mfaPending: true });
+    redirect(`/login/verificar${next !== "/" ? `?next=${encodeURIComponent(next)}` : ""}`);
+  }
+  await createSession(user.id, meta);
   await audit(db, user.id, "login", "users", user.id);
+  redirect(next);
+}
+
+/** Segundo paso del login: código de la app autenticadora o un código de recuperación. */
+export async function verifySecondFactor(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const pending = await getPendingMfaSession();
+  if (!pending) return fail("La verificación expiró. Vuelve a iniciar sesión.");
+  const db = await getDb();
+  const tx = db as unknown as Tx;
+  const meta = await requestMeta();
+  const key = `2fa:${pending.user.email.toLowerCase()}`;
+  if (await isThrottled(tx, key, meta.ip)) return fail("Demasiados intentos. Espera 15 minutos.");
+
+  const how = await checkSecondFactor(tx, pending.user.id, String(form.get("code") ?? ""));
+  await recordAttempt(tx, key, meta.ip, !!how);
+  if (!how) return fail("Código incorrecto.");
+
+  await completeMfaSession(pending.session.id, pending.user.id);
+  await audit(db, pending.user.id, how === "recovery" ? "login_recovery_code" : "login", "users", pending.user.id);
   redirect(safeNext(form.get("next")));
 }
 

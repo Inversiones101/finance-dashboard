@@ -78,6 +78,13 @@
       "when": 1790380076732,
       "tag": "0010_cierre_de_mes",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790400957992,
+      "tag": "0011_seguridad_y_adjuntos",
+      "breakpoints": true
     }
   ]
 }
