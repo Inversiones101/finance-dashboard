@@ -21,6 +21,8 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.3",
+    "exceljs": "^4.4.0",
+    "fflate": "^0.8.3",
     "lucide-react": "^1.47.0",
     "next": "^16.3.5",
     "postgres": "^3.4.9",
@@ -49,5 +51,8 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "vitest": "^5.0.1"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }

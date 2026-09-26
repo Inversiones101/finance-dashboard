@@ -1,4 +1,4 @@
-import { and, desc, gte, lte } from "drizzle-orm";
+import { and, desc, gte, inArray, lte } from "drizzle-orm";
 import { Briefcase, CalendarClock, Package, Plus, Receipt } from "lucide-react";
 import { getDb } from "@/db/client";
 import * as s from "@/db/schema";
@@ -16,6 +16,7 @@ import { PageHeader, Panel, Empty, StatPill } from "@/components/crud/page-heade
 import { MonthFilter } from "@/components/crud/month-filter";
 import { FormDialog } from "@/components/crud/form-dialog";
 import { RowActions } from "@/components/crud/row-actions";
+import { ReceiptsButton } from "@/components/expenses/receipts-button";
 import { StatusBadge } from "@/components/crud/status-badge";
 import { ExpenseFields } from "@/components/forms/expense-fields";
 
@@ -34,6 +35,14 @@ export default async function GastosPage({ searchParams }: PageProps<"/gastos">)
       .where(month ? and(gte(s.expenses.expenseDate, monthRange(month).from), lte(s.expenses.expenseDate, monthRange(month).to)) : undefined)
       .orderBy(desc(s.expenses.expenseDate), desc(s.expenses.createdAt)),
   ]);
+
+  const receipts = rows.length
+    ? await db
+        .select({ id: s.expenseAttachments.id, expenseId: s.expenseAttachments.expenseId, fileName: s.expenseAttachments.fileName, contentType: s.expenseAttachments.contentType, sizeBytes: s.expenseAttachments.sizeBytes })
+        .from(s.expenseAttachments)
+        .where(inArray(s.expenseAttachments.expenseId, rows.map((r) => r.id)))
+    : [];
+  const receiptsOf = (id: string) => receipts.filter((r) => r.expenseId === id);
 
   const kindOf = new Map(o.categories.map((c) => [c.id, c.kind]));
   const usd = (e: (typeof rows)[number]) => Math.round(e.amountCents * Number(e.fxRateToUsd));
@@ -82,7 +91,7 @@ export default async function GastosPage({ searchParams }: PageProps<"/gastos">)
                   <TableHead>Pagado con</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Monto</TableHead>
-                  <TableHead className="w-20" />
+                  <TableHead className="w-28" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -123,6 +132,7 @@ export default async function GastosPage({ searchParams }: PageProps<"/gastos">)
                         editFields={<ExpenseFields o={o} d={e} today={today} />}
                         deleteAction={deleteExpenseAction.bind(null, e.id)}
                         deleteLabel="este gasto"
+                        extra={<ReceiptsButton expenseId={e.id} label={`${e.description} · ${formatMoney(e.amountCents, e.currency)} · ${formatDate(e.expenseDate)}`} receipts={receiptsOf(e.id)} canWrite={canWrite} />}
                       />
                     </TableCell>
                   </TableRow>

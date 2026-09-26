@@ -2,6 +2,7 @@ import { ArrowDownRight, ArrowUpRight, Minus, Scale } from "lucide-react";
 import { requirePage } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { MonthClosePanel } from "@/components/reports/month-close-panel";
+import { AccountantPackage } from "@/components/reports/accountant-package";
 import { getDb } from "@/db/client";
 import { loadFinanceData } from "@/lib/data/finance-data";
 import {
@@ -89,6 +90,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
       <PageHeader title="Reportes" description="Estados financieros de la LLC: resultados, flujo de efectivo y balance general.">
         <ReportFilters view={view} from={from} to={to} currency={currency} hideView={report === "balance"} />
       </PageHeader>
+      <AccountantPackage firstYear={2026} currentYear={Number(todayIn().slice(0, 4))} />
       <MonthClosePanel canClose={can(user.permissions, "reports", "write")} canReopen={can(user.permissions, "reports", "admin")} />
       <ReportTabs report={report} />
 
