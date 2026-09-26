@@ -29,6 +29,14 @@ export async function MonthClosePanel({ canClose, canReopen }: { canClose: boole
             <p className="text-sm font-semibold">{closed ? `Libros cerrados hasta ${name(closed)}` : "Ningún mes cerrado"}</p>
             <p className="text-xs text-muted-foreground">
               {closed ? "Lo que tenga fecha de esos meses ya no se puede registrar, editar ni borrar." : "Al cerrar un mes, sus números quedan fijos."}
+              {closed && (
+                <>
+                  {" "}
+                  <Link href={`/informes?mes=${closed}`} className="font-medium text-foreground underline-offset-2 hover:underline">
+                    Ver el informe de {MONTHS[Number(closed.slice(5, 7)) - 1]} →
+                  </Link>
+                </>
+              )}
             </p>
           </div>
         </div>

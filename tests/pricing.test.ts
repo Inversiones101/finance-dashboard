@@ -78,11 +78,12 @@ describe("comisión de Skool", () => {
 
 describe("alertas del banco en el dashboard", () => {
   it("avisa de lo pendiente por clasificar y de saldos que no cuadran", async () => {
-    expect(await bankAlerts(db)).toEqual([]);
+    const csv = "Importa el CSV de miembros de Skool"; // recordatorio semanal (nunca se ha importado)
+    expect((await bankAlerts(db)).map((a) => a.title)).toEqual([csv]);
     const [chk] = await db.select().from(s.financialAccounts).where(eq(s.financialAccounts.name, "Mercury Checking"));
     await db.insert(s.bankInbox).values({ accountId: chk.id, externalId: "t1", postedOn: "2026-09-20", amountCents: -500 });
     await db.insert(s.accountStatements).values({ accountId: chk.id, statementDate: "2026-09-25", closingBalanceCents: 1000, computedBalanceCents: 1500 });
     const alerts = await bankAlerts(db);
-    expect(alerts.map((a) => a.title)).toEqual(["1 movimiento de Mercury por clasificar", "Mercury Checking no cuadra con el banco"]);
+    expect(alerts.map((a) => a.title)).toEqual([csv, "1 movimiento de Mercury por clasificar", "Mercury Checking no cuadra con el banco"]);
   });
 });

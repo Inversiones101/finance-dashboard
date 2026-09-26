@@ -85,6 +85,13 @@
       "when": 1790400957992,
       "tag": "0011_seguridad_y_adjuntos",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790403079750,
+      "tag": "0012_informe_mensual",
+      "breakpoints": true
     }
   ]
 }

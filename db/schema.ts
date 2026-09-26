@@ -838,3 +838,18 @@ export const expenseAttachments = pgTable(
   },
   (t) => [index("expense_attachments_expense_idx").on(t.expenseId)]
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Informe mensual redactado por la IA
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Un informe por mes ("carta a inversionistas"). `content` = JSON estructurado; `facts` = los números que se le dieron. */
+export const monthlyReports = pgTable("monthly_reports", {
+  id: id(),
+  month: varchar("month", { length: 7 }).notNull().unique(), // YYYY-MM
+  content: jsonb("content").notNull(),
+  facts: jsonb("facts").notNull(),
+  model: varchar("model", { length: 60 }).notNull(),
+  createdBy: createdBy(),
+  ...timestamps,
+});

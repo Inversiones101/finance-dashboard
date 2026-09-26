@@ -272,6 +272,23 @@ export async function bankAlerts(tx: Tx): Promise<{ severity: "warning" | "info"
   for (const r of statements) if (!latest.has(r.st.accountId)) latest.set(r.st.accountId, r);
 
   const out: Awaited<ReturnType<typeof bankAlerts>> = [];
+
+  // Recordatorio semanal: el CSV de Skool es la fuente de altas, bajas y cobros.
+  const [lastImport] = await tx
+    .select({ at: s.auditLog.createdAt })
+    .from(s.auditLog)
+    .where(eq(s.auditLog.action, "import_skool"))
+    .orderBy(desc(s.auditLog.createdAt))
+    .limit(1);
+  const days = lastImport ? Math.floor((Date.now() - lastImport.at.getTime()) / 86_400_000) : null;
+  if (days === null || days >= 7) {
+    out.push({
+      severity: "info",
+      title: days === null ? "Importa el CSV de miembros de Skool" : `Hace ${days} días que no importas el CSV de Skool`,
+      detail: "Mantiene al día altas, bajas, cambios de plan y cobros. Skool → Settings → Members → Export, y súbelo en Miembros.",
+      href: "/miembros",
+    });
+  }
   if (n > 0) out.push({ severity: "info", title: `${n} movimiento${n === 1 ? "" : "s"} de Mercury por clasificar`, detail: "No cuentan en tus libros hasta que los confirmes.", href: "/cuentas" });
   for (const { st, name } of latest.values()) {
     const diff = st.closingBalanceCents - (st.computedBalanceCents ?? 0);

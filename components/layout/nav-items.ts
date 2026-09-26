@@ -15,6 +15,7 @@ import {
   Target,
   LineChart,
   History,
+  Newspaper,
   type LucideIcon,
 } from "lucide-react";
 
@@ -60,7 +61,10 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   },
   {
     label: "Análisis",
-    items: [{ href: "/reportes", label: "Reportes", icon: BarChart3, module: "reports" }],
+    items: [
+      { href: "/reportes", label: "Reportes", icon: BarChart3, module: "reports" },
+      { href: "/informes", label: "Informe mensual", icon: Newspaper, module: "reports" },
+    ],
   },
   {
     label: "Comunidad",
