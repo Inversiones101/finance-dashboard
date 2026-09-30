@@ -122,3 +122,17 @@ describe("aplicar la importación", () => {
     expect(again.items.filter((i) => i.kind !== "unchanged")).toEqual([]);
   });
 });
+
+describe("comisiones estrictas", () => {
+  it("aunque venga 'Invited By', solo se aplica la comisión de Skool (nunca la de afiliado)", async () => {
+    const { PGlite: P } = await import("@electric-sql/pglite");
+    const d = drizzle(new P(), { schema: s });
+    await migrate(d, { migrationsFolder: path.join(__dirname, "..", "db", "migrations") });
+    await seed(d);
+    const db = d as unknown as Tx;
+    await db.insert(s.settings).values({ key: "platform_fee_skool", value: { pct: 2.9, fixedCents: 30, affiliatePct: 40 } }).onConflictDoNothing();
+    await applySkoolImport(db, csv("Zoe,Paz,zoe@x.com,Luis Afiliado,2026-09-20 09:00:00,,,$197,year,standard,$197"), TODAY, null);
+    const [r] = await db.select().from(s.revenues).where(eq(s.revenues.customerName, "Zoe Paz"));
+    expect(r).toMatchObject({ grossCents: 19700, processorFeeCents: 601, affiliateFeeCents: 0, affiliateName: "Luis Afiliado" });
+  });
+});

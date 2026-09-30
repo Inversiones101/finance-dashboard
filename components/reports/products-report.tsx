@@ -70,7 +70,7 @@ export function ProductsReport({ products, affiliates, money, period }: Props) {
 
       <Panel
         title="Afiliados"
-        description="Quién trae miembros (columna “Invited By” del CSV de Skool). Skool les paga la comisión directamente: aquí ves cuánto te cuesta cada uno y cuánto trae."
+        description="Quién trae miembros (columna “Invited By” del CSV de Skool). Skool les paga directamente; la comisión solo aparece si la registraste tú en el cobro."
       >
         {affiliates.length === 0 ? (
           <Empty>Aún no hay miembros referidos. Se llenan al importar el CSV de Skool.</Empty>

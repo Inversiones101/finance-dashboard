@@ -8,7 +8,7 @@ import * as s from "@/db/schema";
 import { parseSkoolCsv, planSkoolImport, type Charge, type ImportPlan, type Interval, type SkoolRow } from "@/lib/import/skool-csv";
 import { saveRevenue, type Tx } from "./ledger";
 import { cancelMember, trackMember } from "./members";
-import { affiliateFeeFor, feeFor, getSkoolFee } from "./platform-fee";
+import { feeFor, getSkoolFee } from "./platform-fee";
 
 type Context = { products: Record<Interval, typeof s.products.$inferSelect>; skoolAccountId: string | null };
 
@@ -73,7 +73,8 @@ async function recordCharges(tx: Tx, ctx: Context, memberId: string, row: SkoolR
       currency: "USD",
       grossCents: c.amountCents,
       processorFeeCents: feeFor(c.amountCents, fee),
-      affiliateFeeCents: row.invitedBy ? affiliateFeeFor(c.amountCents, fee) : 0,
+      // Estricto: solo la comisión de Skool. La de afiliado nunca se calcula sola (solo si la escribes).
+      affiliateFeeCents: 0,
       affiliateName: row.invitedBy,
       status: "available",
       depositAccountId: ctx.skoolAccountId,
