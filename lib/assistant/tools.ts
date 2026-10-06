@@ -29,7 +29,7 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
   {
     name: "resumen_financiero",
     description:
-      "Resumen del negocio al día de hoy: caja en bancos, saldo en plataformas (Skool), resultado del mes (ingresos, utilidad, márgenes, EBITDA), MRR/ARR, miembros, burn, runway, deudas y compromisos, próximos movimientos, alertas, presupuesto del mes y metas. Úsala antes de responder cualquier pregunta sobre cómo va el negocio.",
+      "Resumen del negocio al día de hoy: caja en bancos, saldo en plataformas (Skool), resultado del mes (ventas, beneficio bruto/operativo/neto, márgenes), MRR/ARR, miembros, burn, runway, deudas y compromisos, próximos movimientos, alertas, presupuesto del mes y metas. Úsala antes de responder cualquier pregunta sobre cómo va el negocio.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
@@ -53,7 +53,7 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
   },
   {
     name: "estado_de_resultados",
-    description: "Estado de resultados (P&L) por mes, trimestre o año entre dos meses: facturación, comisiones, ingreso neto, costos directos, utilidad bruta, gastos operativos, EBITDA, EBIT, intereses, utilidad neta y márgenes.",
+    description: "Estado de resultados por mes, trimestre o año entre dos meses: ventas brutas, comisiones, ventas netas, costo de ventas, beneficio bruto, gastos de operación, beneficio operativo (clave ebit), gastos financieros, beneficio antes de impuestos (ebt), beneficio neto y márgenes. Al responder usa esos nombres, nunca EBITDA/EBIT/P&L.",
     input_schema: {
       type: "object",
       properties: {

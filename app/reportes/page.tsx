@@ -1,6 +1,8 @@
 import { ArrowDownRight, ArrowUpRight, Minus, Scale } from "lucide-react";
 import { requirePage } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
+import { TERMS } from "@/lib/finance/terms";
+import { Glossary } from "@/components/reports/glossary";
 import { MonthClosePanel } from "@/components/reports/month-close-panel";
 import { AccountantPackage } from "@/components/reports/accountant-package";
 import { ProductsReport } from "@/components/reports/products-report";
@@ -96,6 +98,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
       <AccountantPackage firstYear={2026} currentYear={Number(todayIn().slice(0, 4))} />
       <MonthClosePanel canClose={can(user.permissions, "reports", "write")} canReopen={can(user.permissions, "reports", "admin")} />
       <ReportTabs report={report} />
+      <Glossary />
 
       {report === "resultados" &&
         (() => {
@@ -114,10 +117,10 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   {(
                     [
-                      ["Ingreso neto", "revenue"],
-                      ["Utilidad bruta", "grossProfit"],
-                      ["EBITDA", "ebitda"],
-                      ["Utilidad neta", "netProfit"],
+                      [TERMS.netSales, "revenue"],
+                      [TERMS.grossProfit, "grossProfit"],
+                      [TERMS.operatingProfit, "ebit"],
+                      [TERMS.netProfit, "netProfit"],
                     ] as [string, PnlKey][]
                   ).map(([label, key]) => (
                     <div key={key} className="rounded-2xl border bg-surface p-4 shadow-card">
@@ -133,7 +136,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                   ))}
                 </div>
               )}
-              <Panel title="Estado de resultados (P&L)" description={`${fxNote} Toca una línea con flecha para ver su desglose.`}>
+              <Panel title={TERMS.incomeStatement} description={`${fxNote} Toca una línea con flecha para ver su desglose; pasa el cursor sobre un concepto para ver qué significa.`}>
                 {r.periods.length === 0 ? (
                   <Empty>Sin datos en este rango.</Empty>
                 ) : (
@@ -150,9 +153,9 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                 <div className="grid gap-3 sm:grid-cols-3">
                   {(
                     [
-                      ["Margen bruto", last.grossMargin],
-                      ["Margen EBITDA", last.ebitdaMargin],
-                      ["Margen neto", last.netMargin],
+                      [TERMS.grossMargin, last.grossMargin],
+                      [TERMS.operatingMargin, last.operatingMargin],
+                      [TERMS.netMargin, last.netMargin],
                     ] as const
                   ).map(([label, v]) => (
                     <div key={label} className="rounded-2xl border bg-surface px-4 py-3 shadow-card">
@@ -202,7 +205,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
             </>
           );
           return (
-            <Panel title="Flujo de efectivo (método directo)" description={`Solo cuentas bancarias de la LLC. Los payouts de Skool entran como cobros de clientes. ${fxNote}`}>
+            <Panel title={`${TERMS.cashFlowStatement} (método directo)`} description={`Solo cuentas bancarias de la LLC. Los payouts de Skool entran como cobros de clientes. ${fxNote}`}>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -217,18 +220,18 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                   </TableHeader>
                   <TableBody>
                     <TableRow>
-                      <TableCell className="sticky left-0 bg-surface text-muted-foreground">Caja al inicio</TableCell>
+                      <TableCell className="sticky left-0 bg-surface text-muted-foreground">{TERMS.openingCash}</TableCell>
                       {f.periods.map((p) => (
                         <TableCell key={p.key} className="text-right tabular text-muted-foreground">
                           {money(p.openingCash)}
                         </TableCell>
                       ))}
                     </TableRow>
-                    {section("Operación", CASHFLOW_ROWS.operating, "operating")}
-                    {section("Inversión", CASHFLOW_ROWS.investing, "investing")}
-                    {section("Financiamiento", CASHFLOW_ROWS.financing, "financing")}
+                    {section(TERMS.operatingActivities, CASHFLOW_ROWS.operating, "operating")}
+                    {section(TERMS.investingActivities, CASHFLOW_ROWS.investing, "investing")}
+                    {section(TERMS.financingActivities, CASHFLOW_ROWS.financing, "financing")}
                     <TableRow className="bg-surface-2/50">
-                      <TableCell className="sticky left-0 bg-surface-2 font-semibold">Variación de caja</TableCell>
+                      <TableCell className="sticky left-0 bg-surface-2 font-semibold">{TERMS.netCashChange}</TableCell>
                       {f.periods.map((p) => (
                         <TableCell key={p.key} className={cn("text-right font-semibold tabular", p.netChange < 0 && "text-money-out-text")}>
                           {money(p.netChange)}
@@ -236,7 +239,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                       ))}
                     </TableRow>
                     <TableRow>
-                      <TableCell className="sticky left-0 bg-surface font-semibold">Caja al cierre</TableCell>
+                      <TableCell className="sticky left-0 bg-surface font-semibold">{TERMS.closingCash}</TableCell>
                       {f.periods.map((p) => (
                         <TableCell key={p.key} className="text-right font-semibold tabular">
                           {money(p.closingCash)}
@@ -278,18 +281,18 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
           return (
             <>
               <div className="grid gap-4 lg:grid-cols-2">
-                <Panel title="Activos" description={`Al ${formatDate(asOf)}`}>
-                  <p className="text-xs font-medium text-muted-foreground">Efectivo en bancos</p>
+                <Panel title={TERMS.assets} description={`${TERMS.balanceSheet} al ${formatDate(asOf)}`}>
+                  <p className="text-xs font-medium text-muted-foreground">Efectivo y equivalentes</p>
                   {b.assets.cash.length === 0 ? <Line label="Sin saldo en bancos" value={0} money={money} indent /> : b.assets.cash.map((c) => <Line key={c.name} label={c.name} value={c.amount} money={money} indent />)}
-                  <p className="mt-2 text-xs font-medium text-muted-foreground">Por cobrar</p>
+                  <p className="mt-2 text-xs font-medium text-muted-foreground">Cuentas por cobrar</p>
                   {b.assets.platforms.map((c) => (
                     <Line key={c.name} label={`${c.name} (pendiente de payout)`} value={c.amount} money={money} indent />
                   ))}
                   <Line label="Cobros sin depositar" value={b.assets.receivables} money={money} indent />
-                  <Line label="Total activos" value={b.assets.total} money={money} strong />
+                  <Line label={`Total ${TERMS.assets.toLowerCase()}`} value={b.assets.total} money={money} strong />
                 </Panel>
                 <div className="flex flex-col gap-4">
-                  <Panel title="Pasivos">
+                  <Panel title={TERMS.liabilities}>
                     {b.liabilities.cards.map((c) => (
                       <Line key={c.name} label={`Tarjeta ${c.name}`} value={c.amount} money={money} indent />
                     ))}
@@ -298,15 +301,15 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                       <Line key={d.name} label={d.name} value={d.amount} money={money} indent />
                     ))}
                     {b.liabilities.ownerLoans !== 0 && <Line label="Préstamos de socios" value={b.liabilities.ownerLoans} money={money} indent />}
-                    <Line label="Total pasivos" value={b.liabilities.total} money={money} strong />
+                    <Line label={`Total ${TERMS.liabilities.toLowerCase()}`} value={b.liabilities.total} money={money} strong />
                   </Panel>
-                  <Panel title="Patrimonio">
-                    <Line label="Capital social (aportes del dueño)" value={b.equity.capital} money={money} indent />
+                  <Panel title={TERMS.equity}>
+                    <Line label={TERMS.contributedCapital} value={b.equity.capital} money={money} indent />
                     {b.equity.openingBalances !== 0 && <Line label="Saldos iniciales de cuentas" value={b.equity.openingBalances} money={money} indent />}
-                    <Line label="Resultado de operación acumulado" value={b.equity.retained} money={money} indent />
+                    <Line label={`${TERMS.retainedEarnings} (beneficios acumulados)`} value={b.equity.retained} money={money} indent />
                     {b.equity.preOperating !== 0 && <Line label="Puesta en marcha (capital inicial usado)" value={-b.equity.preOperating} money={money} indent />}
-                    <Line label="Retiros del dueño" value={-b.equity.draws} money={money} indent />
-                    <Line label="Total patrimonio" value={b.equity.total} money={money} strong />
+                    <Line label={TERMS.ownerDraws} value={-b.equity.draws} money={money} indent />
+                    <Line label={`Total ${TERMS.equity.toLowerCase()}`} value={b.equity.total} money={money} strong />
                   </Panel>
                 </div>
               </div>
@@ -318,7 +321,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
               >
                 <Scale className="size-4" />
                 {b.difference === 0
-                  ? `Cuadra: activos ${money(b.assets.total)} = pasivos ${money(b.liabilities.total)} + patrimonio ${money(b.equity.total)}`
+                  ? `Cuadra: activo ${money(b.assets.total)} = pasivo ${money(b.liabilities.total)} + capital contable ${money(b.equity.total)}`
                   : `Diferencia de ${money(b.difference)}: revisa movimientos sin registrar.`}
               </div>
             </>

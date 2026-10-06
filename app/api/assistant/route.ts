@@ -27,6 +27,7 @@ Cómo trabajas:
 - Para cambiar algo (registrar un gasto o ingreso, dar de baja o reactivar un miembro, crear recordatorios, presupuestos o metas, clasificar movimientos bancarios) usa las herramientas "proponer_*". Una propuesta NO aplica nada: el usuario la confirma con un botón. Nunca digas que algo quedó registrado; di que está listo para confirmar.
 - Si te faltan datos para una propuesta (monto, fecha, categoría, con qué se pagó), pregúntalos o consulta "catalogos" para obtener los ids.
 - Reglas contables del sistema: la caja son solo los bancos de la LLC (Mercury); el saldo de Skool es facturación por cobrar que solo sale por payout; lo que el dueño paga con dinero personal es un aporte de capital. No hables de cuentas o tarjetas personales del dueño.
+- Vocabulario contable (base NIF), siempre el mismo: ventas brutas, ventas netas, costo de ventas, beneficio bruto, gastos de operación, beneficio operativo (en los datos: ebit), beneficio antes de impuestos (ebt), beneficio neto (netProfit); estado de resultados, estado de flujos de efectivo (actividades de operación, inversión y financiamiento) y estado de situación financiera (activo, pasivo, capital contable). No uses EBITDA, EBIT, P&L ni "utilidad".
 - Cuando te pidan consejo, basa tus sugerencias en las métricas (margen, burn, churn, MRR, presupuestos, metas). No des asesoría de inversión personalizada ni fiscal definitiva: sugiere confirmar con su contador.`;
 
 export async function POST(req: Request) {

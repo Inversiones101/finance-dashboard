@@ -140,7 +140,7 @@ export default async function CatalogosPage() {
         <TabsContent value="empresa">
           <Panel
             title="Inicio de operaciones"
-            description="Lo que pagaste de tu bolsillo antes de esta fecha es puesta en marcha: se cubre con tu capital inicial y no cuenta en la operación (utilidad bruta, EBITDA, márgenes ni burn). Desde esta fecha, todo gasto es operativo."
+            description="Lo que pagaste de tu bolsillo antes de esta fecha es puesta en marcha: se cubre con tu capital inicial y no cuenta en la operación (beneficio bruto, beneficio operativo, márgenes ni burn). Desde esta fecha, todo gasto es operativo."
           >
             {canAdmin ? (
               <InlineForm action={saveOperationsStartAction} submitLabel="Guardar">

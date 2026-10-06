@@ -14,7 +14,7 @@ const bricolage = Bricolage_Grotesque({ variable: "--font-bricolage", subsets: [
 
 export const metadata: Metadata = {
   title: BRAND.name,
-  description: `Sistema financiero de ${BRAND.company}: P&L, flujo de caja y aportes del propietario.`,
+  description: `Sistema financiero de ${BRAND.company}: estado de resultados, flujos de efectivo y situación financiera.`,
   // Instalada en el iPhone: pantalla completa y nombre corto bajo el ícono.
   appleWebApp: { capable: true, title: BRAND.name, statusBarStyle: "default" },
 };

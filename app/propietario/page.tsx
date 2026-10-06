@@ -79,7 +79,7 @@ export default async function PropietarioPage() {
         title="Puesta en marcha · capital inicial"
         description={
           startup.start
-            ? `Lo que pagaste de tu bolsillo antes del inicio de operaciones (${formatDate(startup.start)}). Cuenta como aporte de capital, no como gasto: no aparece en Gastos ni afecta utilidad bruta, EBITDA, márgenes, burn o presupuestos. Desde esa fecha, todo gasto de la empresa se registra normal en Gastos.`
+            ? `Lo que pagaste de tu bolsillo antes del inicio de operaciones (${formatDate(startup.start)}). Cuenta como aporte de capital, no como gasto: no aparece en Gastos ni afecta el beneficio bruto, operativo ni neto, los márgenes, el burn o los presupuestos. Desde esa fecha, todo gasto de la empresa se registra normal en Gastos.`
             : "Define la fecha de inicio de operaciones en Catálogos → Empresa."
         }
         actions={

@@ -18,7 +18,7 @@ export function ProductsReport({ products, affiliates, money, period }: Props) {
     <div className="flex flex-col gap-4">
       <Panel
         title="Rentabilidad por producto"
-        description={`${period}. Contribución = ingreso neto − costos asignados al producto (elige el producto al registrar un gasto). Lo no asignado va en gastos generales.`}
+        description={`${period}. Contribución = ventas netas − costos asignados al producto (elige el producto al registrar un gasto). Lo no asignado va en gastos generales.`}
       >
         {products.products.length === 0 ? (
           <Empty>Sin ventas en el periodo.</Empty>
@@ -31,7 +31,7 @@ export function ProductsReport({ products, affiliates, money, period }: Props) {
                   <TableHead className="text-right">Ventas</TableHead>
                   <TableHead className="text-right">Bruto</TableHead>
                   <TableHead className="text-right">Comisiones</TableHead>
-                  <TableHead className="text-right">Ingreso neto</TableHead>
+                  <TableHead className="text-right">Ventas netas</TableHead>
                   <TableHead className="text-right">Costos asignados</TableHead>
                   <TableHead className="text-right">Contribución</TableHead>
                   <TableHead className="text-right">Margen</TableHead>

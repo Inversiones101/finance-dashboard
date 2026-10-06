@@ -8,7 +8,7 @@ const signed = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${formatUSD(Ma
 /** "Tu semana": lo que pasó en los últimos 7 días. Los lunes se destaca como resumen semanal. */
 export function WeeklyCard({ w }: { w: Weekly }) {
   const rows = [
-    { label: "Ingreso neto", value: formatUSD(w.revenue), hint: w.revenuePrev ? `vs ${formatUSD(w.revenuePrev)} la semana anterior` : undefined },
+    { label: "Ventas netas", value: formatUSD(w.revenue), hint: w.revenuePrev ? `vs ${formatUSD(w.revenuePrev)} la semana anterior` : undefined },
     { label: "Gastos de la LLC", value: formatUSD(w.expenses) },
     { label: "Caja en bancos", value: signed(w.cashChange), tone: w.cashChange < 0 ? "out" : undefined },
     { label: "Miembros", value: `+${w.newMembers} / −${w.cancellations}`, hint: "altas / bajas" },

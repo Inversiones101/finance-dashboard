@@ -11,8 +11,8 @@ const VIEWS = [
 
 const REPORTS = [
   { value: "resultados", label: "Estado de resultados" },
-  { value: "flujo", label: "Flujo de efectivo" },
-  { value: "balance", label: "Balance general" },
+  { value: "flujo", label: "Flujos de efectivo" },
+  { value: "balance", label: "Situación financiera (balance)" },
   { value: "productos", label: "Productos y afiliados" },
 ];
 

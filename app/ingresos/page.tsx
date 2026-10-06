@@ -44,7 +44,7 @@ export default async function IngresosPage({ searchParams }: PageProps<"/ingreso
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Ingresos" description="Cada cobro por producto. Facturación bruta − comisiones = ingreso neto. Los cobros mensuales y anuales alimentan el MRR.">
+      <PageHeader title="Ingresos" description="Cada cobro por producto. Ventas brutas − comisiones = ventas netas. Los cobros mensuales y anuales alimentan el MRR.">
         <MonthFilter month={month} allowAll />
         {canWrite && (
           <FormDialog
@@ -63,9 +63,9 @@ export default async function IngresosPage({ searchParams }: PageProps<"/ingreso
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatPill label="Facturación bruta" value={formatMoney(gross)} icon={Wallet} />
+        <StatPill label="Ventas brutas" value={formatMoney(gross)} icon={Wallet} />
         <StatPill label="Comisiones" value={formatMoney(fees)} tone="out" icon={BadgePercent} />
-        <StatPill label="Ingreso neto" value={formatMoney(gross - fees)} tone="in" icon={TrendingUp} />
+        <StatPill label="Ventas netas" value={formatMoney(gross - fees)} tone="in" icon={TrendingUp} />
         <StatPill label="Neto recurrente" value={formatMoney(recurring)} icon={Repeat} />
       </div>
 

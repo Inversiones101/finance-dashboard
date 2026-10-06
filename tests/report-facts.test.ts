@@ -17,7 +17,7 @@ describe("informe mensual", () => {
     const data = await loadFinanceData(d);
     const f = buildReportFacts(data, "2026-09", { asOf: "2026-09-26", hnlPerUsd: 26.9, churnAssumption: 0.05, company: "Inversiones 101 LLC" });
     expect(f.mes_completo).toBe(false);
-    expect(f.resultados.ingreso_neto).toBeCloseTo(f.resultados.facturacion_bruta - f.resultados.comisiones_plataforma - f.resultados.comisiones_afiliados, 2);
+    expect(f.resultados.ventas_netas).toBeCloseTo(f.resultados.ventas_brutas - f.resultados.comisiones_plataforma - f.resultados.comisiones_afiliados, 2);
     expect(f.comunidad.churn_es_supuesto).toBe(true);
     expect(JSON.stringify(f)).not.toMatch(/undefined|NaN/);
 

@@ -29,12 +29,12 @@ describe("paquete para el contador", () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(files["paquete.xlsx"].buffer.slice(files["paquete.xlsx"].byteOffset) as ArrayBuffer);
     expect(wb.worksheets.map((w) => w.name)).toEqual([
-      "Resumen (Summary)", "Resultados (P&L)", "Balance (Balance sheet)", "Flujo (Cash flow)", "Gastos (Expenses)", "Ingresos (Revenue)", "Bancos (Bank activity)", "Dueño (Owner transactions)",
+      "Resumen (Summary)", "Resultados (Income stmt)", "Situación (Balance sheet)", "Flujo (Cash flow)", "Gastos (Expenses)", "Ingresos (Revenue)", "Bancos (Bank activity)", "Dueño (Owner transactions)",
     ]);
     const gastos = wb.getWorksheet("Gastos (Expenses)")!;
     const linked = gastos.getColumn(13).values.map(String);
     expect(linked).toContain(receipt);
-    const check = wb.getWorksheet("Balance (Balance sheet)")!.lastRow!.getCell(2).value;
+    const check = wb.getWorksheet("Situación (Balance sheet)")!.lastRow!.getCell(2).value;
     expect(check).toBe(0); // el balance cuadra
   });
 });

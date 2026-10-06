@@ -13,6 +13,7 @@
  *  - MRR: suma de los planes de los miembros activos (o, sin miembros, de los cobros recurrentes).
  * Montos internos en centavos USD; la salida en dólares.
  */
+import { TERMS } from "./terms";
 
 export type Currency = "USD" | "HNL";
 export type CategoryKind = "revenue" | "cogs" | "opex";
@@ -619,9 +620,9 @@ export function computeBudgets(data: FinanceData, month: string) {
 }
 
 export const GOAL_METRICS: Record<GoalMetric, { label: string; kind: "money" | "count"; cumulative: boolean }> = {
-  gross_revenue: { label: "Facturación bruta", kind: "money", cumulative: true },
-  net_revenue: { label: "Ingreso neto", kind: "money", cumulative: true },
-  net_profit: { label: "Utilidad neta", kind: "money", cumulative: true },
+  gross_revenue: { label: TERMS.grossSales, kind: "money", cumulative: true },
+  net_revenue: { label: TERMS.netSales, kind: "money", cumulative: true },
+  net_profit: { label: TERMS.netProfit, kind: "money", cumulative: true },
   mrr: { label: "MRR", kind: "money", cumulative: false },
   active_members: { label: "Miembros activos", kind: "count", cumulative: false },
   new_members: { label: "Miembros nuevos", kind: "count", cumulative: true },
@@ -958,6 +959,7 @@ export function computeDashboard(data: FinanceData, opts: EngineOptions) {
       opex: toDollars(current.opex),
       grossProfit: toDollars(current.grossProfit),
       ebitda: toDollars(current.ebitda),
+      operatingProfit: toDollars(current.ebit),
       preOperating: toDollars(current.preOperating),
       netProfit: toDollars(current.netProfit),
       netMargin: current.revenue > 0 ? current.netProfit / current.revenue : null,
@@ -1064,22 +1066,21 @@ function periodBounds(key: string, g: Granularity) {
 }
 
 export const PNL_ROWS = [
-  { key: "gross", label: "Facturación bruta", detail: "revenueByProduct" },
-  { key: "processorFees", label: "− Comisiones de plataforma", out: true },
-  { key: "affiliateFees", label: "− Comisiones de afiliados", out: true },
-  { key: "revenue", label: "Ingreso neto", strong: true },
-  { key: "cogs", label: "− Costos directos", out: true, detail: "cogsByCategory" },
-  { key: "grossProfit", label: "Utilidad bruta", strong: true },
-  { key: "opex", label: "− Gastos operativos", out: true, detail: "opexByCategory" },
-  { key: "ebitda", label: "EBITDA", strong: true },
-  { key: "depreciation", label: "− Depreciación y amortización", out: true },
-  { key: "ebit", label: "EBIT (utilidad operativa)", strong: true },
-  { key: "interest", label: "− Intereses y costos financieros", out: true, detail: "interestByCategory" },
-  { key: "other", label: "± Otros ingresos y gastos", detail: "otherByType" },
-  { key: "ebt", label: "Utilidad antes de impuestos", strong: true },
-  { key: "taxes", label: "− Impuestos sobre la renta", out: true },
-  { key: "netProfit", label: "Utilidad neta", strong: true },
-  { key: "preOperating", label: "Aparte: puesta en marcha pagada con tu capital inicial (no resta de la utilidad)", memo: true, detail: "preOperatingByCategory" },
+  { key: "gross", label: TERMS.grossSales, detail: "revenueByProduct", help: "Todo lo cobrado, antes de comisiones." },
+  { key: "processorFees", label: `− ${TERMS.platformFees}`, out: true, help: "Lo que cobra Skool por cada pago." },
+  { key: "affiliateFees", label: `− ${TERMS.affiliateFees}`, out: true, help: "Solo si registraste una comisión de afiliado en el cobro." },
+  { key: "revenue", label: `= ${TERMS.netSales}`, strong: true, help: "Ventas brutas menos comisiones." },
+  { key: "cogs", label: `− ${TERMS.costOfSales}`, out: true, detail: "cogsByCategory", help: "Lo que cuesta entregar el producto." },
+  { key: "grossProfit", label: `= ${TERMS.grossProfit}`, strong: true, help: "Ventas netas − costo de ventas." },
+  { key: "opex", label: `− ${TERMS.operatingExpenses}`, out: true, detail: "opexByCategory", help: "Software, diseño, consultoría, publicidad…" },
+  { key: "depreciation", label: `− ${TERMS.depreciation}`, out: true, help: "Desgaste de activos que duran varios años." },
+  { key: "ebit", label: `= ${TERMS.operatingProfit}`, strong: true, help: "Lo que gana el negocio con su actividad normal." },
+  { key: "interest", label: `− ${TERMS.financialCosts}`, out: true, detail: "interestByCategory", help: "Intereses y costos de deudas." },
+  { key: "other", label: `± ${TERMS.otherIncome}`, detail: "otherByType", help: "Cashback, intereses ganados, comisiones bancarias, ajustes." },
+  { key: "ebt", label: `= ${TERMS.profitBeforeTax}`, strong: true, help: "Lo que queda antes de impuestos." },
+  { key: "taxes", label: `− ${TERMS.incomeTaxes}`, out: true, help: "Impuestos sobre la utilidad de la LLC." },
+  { key: "netProfit", label: `= ${TERMS.netProfit}`, strong: true, help: "El beneficio final, después de impuestos." },
+  { key: "preOperating", label: "Aparte: puesta en marcha pagada con tu capital inicial (no resta del beneficio)", memo: true, detail: "preOperatingByCategory", help: "Lo que pagaste de tu bolsillo antes de operar: es capital, no gasto del periodo." },
 ] as const;
 
 export type PnlKey = (typeof PNL_ROWS)[number]["key"];
@@ -1103,7 +1104,7 @@ export function computePnlReport(data: FinanceData, { from, to, granularity }: {
         Object.fromEntries([...l.detail[k]].map(([name, v]) => [name, toDollars(v)])),
       ])
     ) as Record<DetailKey, Record<string, number>>;
-    return { ...values, netMargin: l.revenue ? l.netProfit / l.revenue : null, ebitdaMargin: l.revenue ? l.ebitda / l.revenue : null, grossMargin: l.revenue ? l.grossProfit / l.revenue : null, details };
+    return { ...values, netMargin: l.revenue ? l.netProfit / l.revenue : null, operatingMargin: l.revenue ? l.ebit / l.revenue : null, grossMargin: l.revenue ? l.grossProfit / l.revenue : null, details };
   };
 
   const keys = periodKeys(from, to, granularity);

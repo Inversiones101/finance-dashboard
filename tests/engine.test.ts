@@ -88,7 +88,7 @@ describe("Estados financieros", () => {
     expect(aug.preOperating).toBeCloseTo(2732.86, 2);
     expect(aug.netProfit).toBe(0); // no resta: se pagó con capital inicial
     expect(sep.processorFees + sep.affiliateFees).toBe(148);
-    expect(sep.ebitda).toBe(3886);
+    expect(sep.ebit).toBe(3886);
     expect(sep.preOperating).toBe(623);
     expect(sep.other).toBe(1.05);
     expect(Object.keys(sep.details.revenueByProduct).sort()).toEqual(["Membresía anual", "Membresía mensual"]);

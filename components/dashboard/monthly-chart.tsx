@@ -7,8 +7,8 @@ type Row = { label: string; gross: number; revenue: number; expenses: number; ne
 
 /** Misma semántica de color en toda la app: ver --money-* en globals.css. */
 const SERIES = [
-  { key: "gross", label: "Facturación bruta", color: "var(--money-gross)", fill: "var(--money-gross)" },
-  { key: "revenue", label: "Ingreso neto", color: "var(--money-net)", fill: "var(--money-net)" },
+  { key: "gross", label: "Ventas brutas", color: "var(--money-gross)", fill: "var(--money-gross)" },
+  { key: "revenue", label: "Ventas netas", color: "var(--money-net)", fill: "var(--money-net)" },
   { key: "expenses", label: "Gastos", color: "var(--money-out)", fill: "url(#hatch-expense)" },
 ] as const;
 
@@ -38,7 +38,7 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
         </p>
       ))}
       <p className="mt-1 border-t pt-1 text-muted-foreground">
-        Utilidad neta{" "}
+        Beneficio neto{" "}
         <span className={`font-medium tabular ${row.net < 0 ? "text-money-out-text" : "text-foreground"}`}>{formatUSD(row.net)}</span>
       </p>
     </div>
@@ -96,10 +96,10 @@ export function MonthlyChart({ data }: { data: Row[] }) {
         <thead>
           <tr>
             <th>Mes</th>
-            <th>Facturación bruta</th>
-            <th>Ingreso neto</th>
+            <th>Ventas brutas</th>
+            <th>Ventas netas</th>
             <th>Gastos</th>
-            <th>Utilidad neta</th>
+            <th>Beneficio neto</th>
           </tr>
         </thead>
         <tbody>

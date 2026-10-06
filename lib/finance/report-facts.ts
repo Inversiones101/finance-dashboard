@@ -31,18 +31,22 @@ export function buildReportFacts(data: FinanceData, month: string, opts: EngineO
   const budgets = (data.budgets ?? []).filter((b) => b.month === month || b.month === null);
 
   const lines = (p: typeof cur) => ({
-    facturacion_bruta: p.gross,
+    ventas_brutas: p.gross,
     comisiones_plataforma: p.processorFees,
     comisiones_afiliados: p.affiliateFees,
-    ingreso_neto: p.revenue,
-    costos_directos: p.cogs,
-    utilidad_bruta: p.grossProfit,
-    gastos_operativos: p.opex,
-    ebitda: p.ebitda,
+    ventas_netas: p.revenue,
+    costo_de_ventas: p.cogs,
+    beneficio_bruto: p.grossProfit,
+    gastos_de_operacion: p.opex + p.depreciation,
+    beneficio_operativo: p.ebit,
+    gastos_financieros: p.interest,
     otros: p.other,
     puesta_en_marcha_capital_inicial: p.preOperating,
-    utilidad_neta: p.netProfit,
+    beneficio_antes_de_impuestos: p.ebt,
+    impuestos: p.taxes,
+    beneficio_neto: p.netProfit,
     margen_bruto: round(p.grossMargin, 3),
+    margen_operativo: round(p.operatingMargin, 3),
     margen_neto: round(p.netMargin, 3),
   });
 

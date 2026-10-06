@@ -135,7 +135,7 @@ export default async function DashboardPage() {
       node: (
         <div className="flex flex-col justify-between gap-4 rounded-3xl border bg-surface p-6 shadow-card h-full">
           <div>
-            <p className="text-sm text-muted-foreground">Utilidad neta · {monthShort}</p>
+            <p className="text-sm text-muted-foreground">Beneficio neto · {monthShort}</p>
             <p className={cn("mt-2 font-heading text-4xl font-bold tabular", kpis.netProfit < 0 && "text-money-out-text")}>{formatUSD(kpis.netProfit)}</p>
             {kpis.netProfit >= 0 ? (
               <p className="mt-1 inline-flex items-center gap-1 text-sm text-success">
@@ -153,8 +153,8 @@ export default async function DashboardPage() {
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-2xl bg-surface-2 p-3">
-              <p className="text-xs text-muted-foreground">EBITDA</p>
-              <p className="font-heading text-lg font-bold tabular">{formatUSD(kpis.ebitda)}</p>
+              <p className="text-xs text-muted-foreground">Beneficio operativo</p>
+              <p className="font-heading text-lg font-bold tabular">{formatUSD(kpis.operatingProfit)}</p>
             </div>
             <div className="rounded-2xl bg-surface-2 p-3">
               <p className="text-xs text-muted-foreground">MRR</p>
@@ -172,12 +172,12 @@ export default async function DashboardPage() {
       span: "full",
       node: (
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <KpiTile label="Ingreso neto" value={formatUSD(kpis.revenue)} hint={`${formatUSD(kpis.revenueGross)} facturación bruta`} icon={TrendingUp} dot="var(--money-net)" />
-        <KpiTile label="Utilidad bruta" value={formatUSD(kpis.grossProfit)} hint="Ingreso neto − costos directos" icon={CircleDollarSign} />
+        <KpiTile label="Ventas netas" value={formatUSD(kpis.revenue)} hint={`${formatUSD(kpis.revenueGross)} ventas brutas`} icon={TrendingUp} dot="var(--money-net)" />
+        <KpiTile label="Beneficio bruto" value={formatUSD(kpis.grossProfit)} hint="Ventas netas − costo de ventas" icon={CircleDollarSign} />
         <KpiTile
           label="Margen neto"
           value={kpis.netMargin === null ? "—" : formatPct(kpis.netMargin)}
-          hint="Utilidad neta ÷ ingreso neto"
+          hint="Beneficio neto ÷ ventas netas"
           icon={BadgePercent}
           trend={kpis.netMargin === null ? "flat" : kpis.netMargin >= 0 ? "up" : "down"}
         />
@@ -235,7 +235,7 @@ export default async function DashboardPage() {
           <div className="flex h-full flex-col rounded-3xl border bg-surface p-5 shadow-card md:p-6">
             <div className="mb-3">
               <h2 className="text-lg font-semibold">Evolución mensual</h2>
-              <p className="text-sm text-muted-foreground">Facturación, ingreso neto y gastos (P&L)</p>
+              <p className="text-sm text-muted-foreground">Ventas brutas, ventas netas y gastos</p>
             </div>
             <div className="flex-1">
               <MonthlyChart data={d.series} />

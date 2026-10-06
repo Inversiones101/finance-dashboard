@@ -13,22 +13,21 @@ import { BRAND } from "@/lib/config";
 import type { Tx } from "./ledger";
 
 const PNL_EN: Record<string, string> = {
-  gross: "Gross billings",
+  gross: "Gross sales",
   processorFees: "Platform fees",
   affiliateFees: "Affiliate fees",
-  revenue: "Net revenue",
-  cogs: "Cost of revenue",
+  revenue: "Net sales",
+  cogs: "Cost of sales",
   grossProfit: "Gross profit",
   opex: "Operating expenses",
-  ebitda: "EBITDA",
   depreciation: "Depreciation & amortization",
-  ebit: "Operating income (EBIT)",
-  interest: "Interest & financing costs",
+  ebit: "Operating profit",
+  interest: "Financial costs",
   other: "Other income / expense",
-  preOperating: "Memo: start-up costs paid with owner capital (excluded from net income)",
-  ebt: "Income before taxes",
+  ebt: "Profit before tax",
   taxes: "Income taxes",
-  netProfit: "Net income",
+  netProfit: "Net profit",
+  preOperating: "Memo: start-up costs paid with owner capital (excluded from net profit)",
 };
 
 const FUNDING: Record<string, string> = { llc_cash: "Caja LLC (LLC cash)", llc_credit: "Tarjeta LLC (LLC card)", owner_personal: "Aporte del dueño (owner-paid)" };
@@ -92,19 +91,20 @@ export async function buildAccountantPackage(tx: Tx, { from, to, hnlPerUsd, read
     { k: "Generado (Generated)", v: new Date().toISOString().slice(0, 10) },
     { k: "Moneda (Currency)", v: "USD" },
     { k: "", v: "" },
-    { k: "Facturación bruta (Gross billings)", v: t.gross },
-    { k: "Ingreso neto (Net revenue)", v: t.revenue },
-    { k: "Utilidad bruta (Gross profit)", v: t.grossProfit },
+    { k: "Ventas brutas (Gross sales)", v: t.gross },
+    { k: "Ventas netas (Net sales)", v: t.revenue },
+    { k: "Beneficio bruto (Gross profit)", v: t.grossProfit },
     { k: "Gastos operativos (Operating expenses)", v: t.opex },
-    { k: "EBITDA", v: t.ebitda },
+    { k: "Beneficio operativo (Operating profit)", v: t.ebit },
     { k: "Puesta en marcha (Start-up costs, owner-funded)", v: t.preOperating },
-    { k: "Utilidad neta (Net income)", v: t.netProfit },
+    { k: "Beneficio antes de impuestos (Profit before tax)", v: t.ebt },
+    { k: "Beneficio neto (Net profit)", v: t.netProfit },
     { k: "", v: "" },
     { k: "Aportes del dueño en el periodo (Owner contributions)", v: Math.round(contributions * 100) / 100 },
     { k: "Retiros del dueño en el periodo (Owner draws)", v: Math.round(draws * 100) / 100 },
     { k: `Activos al ${to} (Total assets)`, v: bs.assets.total },
     { k: `Pasivos al ${to} (Total liabilities)`, v: bs.liabilities.total },
-    { k: `Patrimonio al ${to} (Total equity)`, v: bs.equity.total },
+    { k: `Capital contable al ${to} (Total equity)`, v: bs.equity.total },
     { k: "", v: "" },
     { k: "Gastos registrados (Expense records)", v: expenses.length },
     { k: "Recibos incluidos (Receipts included)", v: files.length },
@@ -113,34 +113,34 @@ export async function buildAccountantPackage(tx: Tx, { from, to, hnlPerUsd, read
   summary.getColumn("v").alignment = { horizontal: "right" };
 
   // ── Estado de resultados por mes ───────────────────────────────────────────
-  const pnlWs = sheet(wb, "Resultados (P&L)", [
+  const pnlWs = sheet(wb, "Resultados (Income stmt)", [
     { header: "Línea (Line)", key: "line", width: 44 },
     ...pnl.periods.map((p) => ({ header: p.label, key: p.key, width: 14, money: true })),
     { header: "Total", key: "total", width: 14, money: true },
   ]);
   for (const r of PNL_ROWS) {
-    const es = r.label.replace(/^[−±]\s*/, "");
+    const es = r.label.replace(/^[−±=]\s*/, "");
     const row = pnlWs.addRow({ line: es === PNL_EN[r.key] ? es : `${es} (${PNL_EN[r.key]})`, ...Object.fromEntries(pnl.periods.map((p) => [p.key, p[r.key]])), total: t[r.key] });
     if ("strong" in r && r.strong) row.font = { bold: true };
   }
 
   // ── Balance general ────────────────────────────────────────────────────────
-  const bsWs = sheet(wb, "Balance (Balance sheet)", [
+  const bsWs = sheet(wb, "Situación (Balance sheet)", [
     { header: `Al ${to} (As of)`, key: "k", width: 50 },
     { header: "USD", key: "v", width: 16, money: true },
   ]);
   const bold = (k: string, v: number) => (bsWs.addRow({ k, v }).font = { bold: true });
-  bold("ACTIVOS (ASSETS)", bs.assets.total);
+  bold("ACTIVO (ASSETS)", bs.assets.total);
   for (const c of bs.assets.cash) bsWs.addRow({ k: `  Banco: ${c.name}`, v: c.amount });
   for (const p of bs.assets.platforms) bsWs.addRow({ k: `  Por cobrar en plataforma: ${p.name} (Platform receivable)`, v: p.amount });
   if (bs.assets.receivables) bsWs.addRow({ k: "  Cuentas por cobrar (Receivables)", v: bs.assets.receivables });
-  bold("PASIVOS (LIABILITIES)", bs.liabilities.total);
+  bold("PASIVO (LIABILITIES)", bs.liabilities.total);
   for (const c of bs.liabilities.cards) bsWs.addRow({ k: `  Tarjeta: ${c.name} (Credit card)`, v: c.amount });
   if (bs.liabilities.payables) bsWs.addRow({ k: "  Cuentas por pagar (Payables)", v: bs.liabilities.payables });
   for (const d of bs.liabilities.debts) bsWs.addRow({ k: `  Deuda: ${d.name} (Debt)`, v: d.amount });
   if (bs.liabilities.ownerLoans) bsWs.addRow({ k: "  Préstamos del dueño (Owner loans)", v: bs.liabilities.ownerLoans });
-  bold("PATRIMONIO (EQUITY)", bs.equity.total);
-  bsWs.addRow({ k: "  Capital aportado (Contributed capital)", v: bs.equity.capital });
+  bold("CAPITAL CONTABLE (EQUITY)", bs.equity.total);
+  bsWs.addRow({ k: "  Capital contribuido (Contributed capital)", v: bs.equity.capital });
   bsWs.addRow({ k: "  Retiros (Draws)", v: -bs.equity.draws });
   bsWs.addRow({ k: "  Resultados acumulados (Retained earnings)", v: bs.equity.retained });
   if (bs.equity.preOperating) bsWs.addRow({ k: "  Puesta en marcha (Start-up costs)", v: -bs.equity.preOperating });
@@ -154,14 +154,14 @@ export async function buildAccountantPackage(tx: Tx, { from, to, hnlPerUsd, read
     const row = cfWs.addRow({ k: label, ...Object.fromEntries(cf.periods.map((p) => [p.key, get(p)])) });
     if (strong) row.font = { bold: true };
   };
-  cfRow("Caja inicial (Opening cash)", (p) => p.openingCash, true);
+  cfRow("Efectivo al inicio del periodo (Opening cash)", (p) => p.openingCash, true);
   for (const r of CASHFLOW_ROWS.operating) cfRow(`  ${r.label}`, (p) => p.rows[r.key] ?? 0);
-  cfRow("Operación (Operating)", (p) => p.operating, true);
+  cfRow("Actividades de operación (Operating activities)", (p) => p.operating, true);
   for (const r of CASHFLOW_ROWS.investing) cfRow(`  ${r.label}`, (p) => p.rows[r.key] ?? 0);
-  cfRow("Inversión (Investing)", (p) => p.investing, true);
+  cfRow("Actividades de inversión (Investing activities)", (p) => p.investing, true);
   for (const r of CASHFLOW_ROWS.financing) cfRow(`  ${r.label}`, (p) => p.rows[r.key] ?? 0);
-  cfRow("Financiamiento (Financing)", (p) => p.financing, true);
-  cfRow("Caja final (Closing cash)", (p) => p.closingCash, true);
+  cfRow("Actividades de financiamiento (Financing activities)", (p) => p.financing, true);
+  cfRow("Efectivo al final del periodo (Closing cash)", (p) => p.closingCash, true);
 
   // ── Gastos (con recibos) ───────────────────────────────────────────────────
   const zipFiles: Record<string, Uint8Array> = {};
@@ -273,7 +273,7 @@ export async function buildAccountantPackage(tx: Tx, { from, to, hnlPerUsd, read
     `Periodo / Period: ${from} → ${to}`,
     "",
     "paquete.xlsx",
-    "  Resumen (Summary), Resultados (P&L por mes), Balance, Flujo de efectivo,",
+    "  Resumen, Estado de resultados por mes, Estado de situación financiera, Flujos de efectivo,",
     "  Gastos con su recibo, Ingresos, Movimientos bancarios y transacciones con el dueño.",
     "recibos/",
     "  Un archivo por recibo; el nombre coincide con la columna 'Recibo' de la hoja Gastos.",

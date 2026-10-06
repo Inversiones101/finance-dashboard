@@ -63,7 +63,7 @@ export default async function MetasPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Metas" description="Objetivos de facturación, utilidad, MRR, miembros o caja. Las acumulativas se comparan contra el ritmo esperado a la fecha.">
+      <PageHeader title="Metas" description="Objetivos de ventas, beneficio, MRR, miembros o caja. Las acumulativas se comparan contra el ritmo esperado a la fecha.">
         {canWrite && (
           <FormDialog title="Nueva meta" action={saveGoalAction} wide trigger={<Button><Plus className="size-4" /> Nueva meta</Button>}>
             <GoalFields today={today} />
