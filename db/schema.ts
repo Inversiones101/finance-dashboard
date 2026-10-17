@@ -140,6 +140,7 @@ export const cashMovementTypeEnum = pgEnum("cash_movement_type", [
   "fee",
   "interest",
   "adjustment",
+  "sales_tax_collected", // impuesto sobre ventas cobrado al cliente (pasivo por remitir, no es ingreso)
 ]);
 
 /**
@@ -380,6 +381,12 @@ export const products = pgTable("products", {
   platform: text("platform"), // Skool, Hotmart, Stripe, directo
   isActive: boolean("is_active").notNull().default(true),
   color: varchar("color", { length: 16 }),
+  /** Producto equivalente en Stripe (prod_…): enlaza los cobros que llegan por webhook. */
+  stripeProductId: text("stripe_product_id").unique(),
+  /** Plan financiado: número de cuotas (ej. 3). Vacío = cobro normal. */
+  installments: integer("installments"),
+  /** Niveles de acceso en Skool por cuota pagada, en orden (ej. ["Módulos 1–4", "Módulos 5–8", "Acceso completo"]). */
+  accessLevels: jsonb("access_levels"),
   ...timestamps,
 });
 
@@ -415,6 +422,8 @@ export const members = pgTable(
     email: text("email"),
     /** Quién lo invitó (afiliado), según el CSV de Skool. */
     invitedBy: text("invited_by"),
+    /** Cliente en Stripe (cus_…). */
+    stripeCustomerId: text("stripe_customer_id").unique(),
     productId: uuid("product_id").notNull().references(() => products.id),
     billingInterval: billingIntervalEnum("billing_interval").notNull(),
     currency: currencyEnum("currency").notNull().default("USD"),
@@ -487,6 +496,15 @@ export const revenues = pgTable(
     status: revenueStatusEnum("status").notNull().default("pending"),
     /** Dónde está el dinero: normalmente "Saldo Skool" hasta el payout. */
     depositAccountId: uuid("deposit_account_id").references(() => financialAccounts.id),
+    /** Id del cobro en la plataforma (factura de Stripe in_…) para no registrarlo dos veces. */
+    externalId: text("external_id").unique(),
+    stripeChargeId: text("stripe_charge_id"),
+    /** Impuesto sobre ventas cobrado al cliente (va aparte: es pasivo por remitir, no ingreso). */
+    taxCents: cents("tax_cents").notNull().default(0),
+    taxCountry: varchar("tax_country", { length: 2 }),
+    taxRegion: text("tax_region"),
+    /** Quién es el comerciante registrado: Skool (cobra y remite impuestos) o la LLC (Stripe directo). */
+    merchantOfRecord: varchar("merchant_of_record", { length: 10 }).notNull().default("skool"),
     externalRef: text("external_ref"),
     notes: text("notes"),
     createdBy: createdBy(),
@@ -859,3 +877,87 @@ export const monthlyReports = pgTable("monthly_reports", {
   createdBy: createdBy(),
   ...timestamps,
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stripe: eventos, contratos en cuotas y tareas de acceso a Skool
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Cada evento de webhook procesado una sola vez (id evt_… de Stripe). */
+export const stripeEvents = pgTable("stripe_events", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  livemode: boolean("livemode").notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const contractStatusEnum2 = pgEnum("customer_contract_status", ["al_dia", "pendiente", "fallido", "vencido", "completado", "cancelado"]);
+
+/** Membresía financiada: un cliente que paga un producto en N cuotas (lo que te deben, no lo que debes). */
+export const customerContracts = pgTable(
+  "customer_contracts",
+  {
+    id: id(),
+    memberId: uuid("member_id").notNull().references(() => members.id),
+    productId: uuid("product_id").notNull().references(() => products.id),
+    stripeCustomerId: text("stripe_customer_id"),
+    stripeSubscriptionId: text("stripe_subscription_id").unique(),
+    stripeScheduleId: text("stripe_schedule_id"),
+    currency: currencyEnum("currency").notNull().default("USD"),
+    totalCents: cents("total_cents").notNull(),
+    installments: integer("installments").notNull(),
+    status: contractStatusEnum2("status").notNull().default("al_dia"),
+    accessStart: date("access_start").notNull(),
+    accessEnd: date("access_end").notNull(),
+    /** Nivel de acceso confirmado en Skool (solo cambia al confirmar la tarea). */
+    accessLevelConfirmed: integer("access_level_confirmed").notNull().default(0),
+    nextDueDate: date("next_due_date"),
+    failedSince: date("failed_since"),
+    ...timestamps,
+  },
+  (t) => [index("customer_contracts_status_idx").on(t.status)]
+);
+
+export const installmentStatusEnum = pgEnum("installment_status", ["pagada", "pendiente", "fallida", "reembolsada"]);
+
+export const contractInstallments = pgTable(
+  "contract_installments",
+  {
+    id: id(),
+    contractId: uuid("contract_id").notNull().references(() => customerContracts.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    amountCents: cents("amount_cents").notNull(),
+    dueDate: date("due_date"),
+    status: installmentStatusEnum("status").notNull().default("pendiente"),
+    stripeInvoiceId: text("stripe_invoice_id").unique(),
+    revenueId: uuid("revenue_id").references(() => revenues.id, { onDelete: "set null" }),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    failedAt: timestamp("failed_at", { withTimezone: true }),
+    attempts: integer("attempts").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("contract_installment_number_idx").on(t.contractId, t.number)]
+);
+
+export const accessTaskKindEnum = pgEnum("access_task_kind", ["grant_level", "contact_client", "restrict_access", "restore_access", "review_access"]);
+export const accessTaskStatusEnum = pgEnum("access_task_status", ["pendiente", "hecha", "descartada"]);
+
+/**
+ * Acciones manuales en Skool (no tiene API para módulos). El nivel visible del contrato solo
+ * sube cuando alguien confirma que lo hizo en Skool.
+ */
+export const accessTasks = pgTable(
+  "access_tasks",
+  {
+    id: id(),
+    contractId: uuid("contract_id").notNull().references(() => customerContracts.id, { onDelete: "cascade" }),
+    kind: accessTaskKindEnum("kind").notNull(),
+    level: integer("level"),
+    title: text("title").notNull(),
+    detail: text("detail"),
+    status: accessTaskStatusEnum("status").notNull().default("pendiente"),
+    doneAt: timestamp("done_at", { withTimezone: true }),
+    doneBy: uuid("done_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("access_tasks_status_idx").on(t.status)]
+);

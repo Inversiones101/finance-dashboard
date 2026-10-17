@@ -273,6 +273,22 @@ export async function bankAlerts(tx: Tx): Promise<{ severity: "warning" | "info"
 
   const out: Awaited<ReturnType<typeof bankAlerts>> = [];
 
+  // Clientes financiados (Stripe): cobros fallidos, vencidos, próximos y tareas de Skool pendientes.
+  const contracts = await tx
+    .select({ c: s.customerContracts, name: s.members.name })
+    .from(s.customerContracts)
+    .innerJoin(s.members, eq(s.members.id, s.customerContracts.memberId));
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Tegucigalpa" });
+  const inDays = (d: string) => Math.round((Date.parse(`${d}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+  for (const { c, name } of contracts) {
+    if (c.status === "vencido") out.push({ severity: "warning", title: `${name}: cuota vencida`, detail: "Pasaron los días de gracia. Revisa si hay que restringir el acceso en Skool.", href: "/clientes-financiados" });
+    else if (c.status === "fallido") out.push({ severity: "warning", title: `${name}: falló el cobro de una cuota`, detail: "Stripe lo reintentará. Contacta al cliente.", href: "/clientes-financiados" });
+    else if (c.nextDueDate && inDays(c.nextDueDate) >= 0 && inDays(c.nextDueDate) <= 3)
+      out.push({ severity: "info", title: `${name}: cuota ${inDays(c.nextDueDate) === 0 ? "hoy" : `en ${inDays(c.nextDueDate)} días`}`, detail: "Cobro automático en Stripe.", href: "/clientes-financiados" });
+  }
+  const [{ tasks }] = await tx.select({ tasks: sql<number>`count(*)::int` }).from(s.accessTasks).where(eq(s.accessTasks.status, "pendiente"));
+  if (tasks > 0) out.push({ severity: "warning", title: `${tasks} tarea${tasks === 1 ? "" : "s"} de acceso en Skool por hacer`, detail: "Confirma cuando lo hayas hecho en Skool.", href: "/clientes-financiados" });
+
   // Recordatorio semanal: el CSV de Skool es la fuente de altas, bajas y cobros.
   const [lastImport] = await tx
     .select({ at: s.auditLog.createdAt })

@@ -301,6 +301,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                       <Line key={d.name} label={d.name} value={d.amount} money={money} indent />
                     ))}
                     {b.liabilities.ownerLoans !== 0 && <Line label="Préstamos de socios" value={b.liabilities.ownerLoans} money={money} indent />}
+                    {b.liabilities.salesTaxPayable !== 0 && <Line label="Impuestos sobre ventas por remitir" value={b.liabilities.salesTaxPayable} money={money} indent />}
                     <Line label={`Total ${TERMS.liabilities.toLowerCase()}`} value={b.liabilities.total} money={money} strong />
                   </Panel>
                   <Panel title={TERMS.equity}>

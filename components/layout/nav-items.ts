@@ -16,6 +16,7 @@ import {
   LineChart,
   History,
   Newspaper,
+  HandCoins,
   type LucideIcon,
 } from "lucide-react";
 
@@ -68,7 +69,10 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   },
   {
     label: "Comunidad",
-    items: [{ href: "/miembros", label: "Miembros y MRR", icon: Users, module: "revenue" }],
+    items: [
+      { href: "/miembros", label: "Miembros y MRR", icon: Users, module: "revenue" },
+      { href: "/clientes-financiados", label: "Clientes financiados", icon: HandCoins, module: "revenue" },
+    ],
   },
   {
     label: "Configuración",

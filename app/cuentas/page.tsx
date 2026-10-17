@@ -8,6 +8,8 @@ import { can } from "@/lib/auth/permissions";
 import { getFormOptions } from "@/lib/data/options";
 import { ClassifyFields } from "@/components/forms/classify-fields";
 import { BankInbox } from "@/components/banking/bank-inbox";
+import { latestStripeBalance } from "@/lib/services/stripe-sync";
+import type { Tx } from "@/lib/services/ledger";
 import { todayIn } from "@/lib/today";
 import { formatDate, formatMoney } from "@/lib/format";
 import { ACCOUNT_STATUS, ACCOUNT_TYPE, CURRENCY_OPTIONS, MOVEMENT_TYPE, toOptions } from "@/lib/labels";
@@ -77,6 +79,7 @@ export default async function CuentasPage({ searchParams }: PageProps<"/cuentas"
   const { cuenta, seccion } = await searchParams;
   const db = await getDb();
   const o = await getFormOptions();
+  const stripeBalance = await latestStripeBalance(db as unknown as Tx);
 
   const [movements, pendingCard] = await Promise.all([
     db.select().from(s.cashMovements).orderBy(desc(s.cashMovements.movementDate), desc(s.cashMovements.createdAt)),
@@ -139,7 +142,14 @@ export default async function CuentasPage({ searchParams }: PageProps<"/cuentas"
             </p>
           </div>
         ) : (
-          <p className="font-heading text-xl font-bold tabular">{formatMoney(balance(a), a.currency)}</p>
+          <div>
+            <p className="font-heading text-xl font-bold tabular">{formatMoney(balance(a), a.currency)}</p>
+            {a.institution?.toLowerCase() === "stripe" && stripeBalance && (
+              <p className="text-xs text-muted-foreground">
+                Stripe: disponible {formatMoney(stripeBalance.availableCents)} · por liquidar {formatMoney(stripeBalance.pendingCents)}
+              </p>
+            )}
+          </div>
         )}
       </Link>
     );

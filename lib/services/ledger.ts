@@ -199,6 +199,12 @@ export type RevenueInput = {
   status: "pending" | "available" | "paid_out" | "refunded" | "disputed";
   depositAccountId: string | null;
   memberId?: string | null;
+  externalId?: string | null;
+  stripeChargeId?: string | null;
+  taxCents?: number;
+  taxCountry?: string | null;
+  taxRegion?: string | null;
+  merchantOfRecord?: "skool" | "llc";
   affiliateName?: string | null;
   notes: string | null;
   createdBy?: string | null;
@@ -224,6 +230,20 @@ export async function syncRevenue(tx: Tx, revenueId: string) {
       description: "Cobro (neto de comisiones)",
       createdBy: r.createdBy,
     });
+    // El impuesto sobre ventas cobrado entra al mismo saldo, pero es un pasivo por remitir.
+    if (r.taxCents > 0) {
+      await tx.insert(s.cashMovements).values({
+        accountId: a.id,
+        movementDate: r.revenueDate,
+        type: "sales_tax_collected",
+        amountCents: r.taxCents,
+        currency: r.currency,
+        fxRateToUsd: r.fxRateToUsd,
+        revenueId: r.id,
+        description: `Impuesto sobre ventas cobrado${r.taxCountry ? ` (${r.taxCountry}${r.taxRegion ? `-${r.taxRegion}` : ""})` : ""}`,
+        createdBy: r.createdBy,
+      });
+    }
   } else {
     // Dinero de la LLC que cayó directo en una cuenta personal = retiro del dueño.
     await tx.insert(s.ownerLedger).values({

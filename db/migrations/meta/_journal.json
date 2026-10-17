@@ -106,6 +106,13 @@
       "when": 1790793710510,
       "tag": "0014_categoria_reembolsos",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792203392409,
+      "tag": "0015_stripe_contratos",
+      "breakpoints": true
     }
   ]
 }

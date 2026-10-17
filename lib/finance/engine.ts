@@ -1250,6 +1250,8 @@ export function computeBalanceSheet(data: FinanceData, { asOf, hnlPerUsd }: { as
     .filter((x) => x.amount !== 0);
   const ownerSum = (t: string) => sum(data.ownerLedger.filter((o) => o.type === t && o.date <= asOf).map((o) => usd(o.amountCents, o.fxRateToUsd)));
   const ownerLoans = ownerSum("loan") - ownerSum("reimbursement");
+  // Impuesto sobre ventas cobrado a clientes (Stripe): es dinero de la autoridad fiscal, no de la LLC.
+  const salesTaxPayable = sum(data.movements.filter((m) => m.type === "sales_tax_collected" && m.date <= asOf).map((m) => usd(m.amountCents, m.fxRateToUsd)));
 
   // Patrimonio
   const lines = makePnl(data);
@@ -1261,7 +1263,7 @@ export function computeBalanceSheet(data: FinanceData, { asOf, hnlPerUsd }: { as
   const draws = ownerSum("draw");
 
   const totalAssets = sum(cash.map((c) => c.amount)) + sum(platforms.map((p) => p.amount)) + receivables;
-  const totalLiabilities = sum(cards.map((c) => c.amount)) + payables + sum(debts.map((d) => d.amount)) + ownerLoans;
+  const totalLiabilities = sum(cards.map((c) => c.amount)) + payables + sum(debts.map((d) => d.amount)) + ownerLoans + salesTaxPayable;
   const totalEquity = capital - draws + retained - preOperating + openingBalances;
 
   const list = (xs: { name: string; amount: number }[]) => xs.map((x) => ({ name: x.name, amount: toDollars(x.amount) }));
@@ -1278,6 +1280,7 @@ export function computeBalanceSheet(data: FinanceData, { asOf, hnlPerUsd }: { as
       payables: toDollars(payables),
       debts: list(debts),
       ownerLoans: toDollars(ownerLoans),
+      salesTaxPayable: toDollars(salesTaxPayable),
       total: toDollars(totalLiabilities),
     },
     equity: {

@@ -56,6 +56,17 @@ function ProductFields({ o, d }: { o: FormOptions; d?: Product }) {
         <SelectField label="Tipo de cobro habitual" name="defaultBillingInterval" options={INTERVAL_OPTIONS} defaultValue={d?.defaultBillingInterval ?? "one_time"} />
       </FieldRow>
       <TextField label="Plataforma" name="platform" defaultValue={d?.platform} placeholder="Skool, Hotmart, Stripe, directo…" />
+      <p className="text-xs font-medium text-muted-foreground">Cobros directos con Stripe (opcional)</p>
+      <FieldRow>
+        <TextField label="Id del producto en Stripe" name="stripeProductId" defaultValue={d?.stripeProductId} placeholder="prod_…" hint="Stripe → Catálogo de productos → el producto → copia su id." />
+        <TextField label="Número de cuotas" name="installments" type="number" defaultValue={d?.installments} hint="Ej. 3 para la anual financiada. Vacío = cobro normal." />
+      </FieldRow>
+      <TextareaField
+        label="Niveles de acceso en Skool (uno por línea, en orden de cuota)"
+        name="accessLevels"
+        defaultValue={Array.isArray(d?.accessLevels) ? (d.accessLevels as string[]).join("\n") : undefined}
+        hint="Ej. “Módulos 1–4” para la cuota 1, “Módulos 5–8” para la 2, “Acceso completo” para la 3."
+      />
       <CheckboxField name="isActive" label="Activo (aparece al registrar ingresos)" defaultChecked={d?.isActive ?? true} />
     </>
   );

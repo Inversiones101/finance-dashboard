@@ -48,7 +48,7 @@ describe("Caja, propietario y compromisos", () => {
   it("caja = solo bancos; el saldo de Skool va aparte como plataforma de cobro", () => {
     expect(d.cash.total).toBe(0); // Mercury aún no abre
     expect(d.cash.accounts.map((a) => a.name)).toEqual(["Mercury Checking", "Mercury Savings"]);
-    expect(d.platforms).toMatchObject({ total: 3885.71, accounts: [{ name: "Saldo Skool", balance: 3885.71 }] });
+    expect(d.platforms).toMatchObject({ total: 3885.71, accounts: [{ name: "Saldo Skool", balance: 3885.71 }, { name: "Saldo Stripe", balance: 0 }] });
     expect(d.cash.llcCards[0]).toMatchObject({ name: "Mercury IO", status: "pending_opening", balance: 0 });
   });
   it("gastos pagados con dinero personal son aportes, no salen de la caja", () => {

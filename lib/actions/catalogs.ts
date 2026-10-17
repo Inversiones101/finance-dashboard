@@ -25,12 +25,19 @@ const productSchema = z.object({
   defaultBillingInterval: zInterval,
   platform: zOptText,
   isActive: z.preprocess((v) => v === "on", z.boolean()),
+  stripeProductId: z.preprocess((v) => (typeof v === "string" && v.trim() ? v.trim() : null), z.string().regex(/^prod_\w+$/, "El id de Stripe empieza con prod_").nullable()),
+  installments: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.coerce.number().int().min(2).max(24).nullable()),
+  accessLevels: z.preprocess(
+    (v) => (typeof v === "string" ? v.split("\n").map((x) => x.trim()).filter(Boolean) : []),
+    z.array(z.string().max(80)).max(24)
+  ),
 });
 
 export async function saveProductAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   const p = parseForm(productSchema, form);
   if (!p.data) return fail(p.error);
-  const { id, ...v } = p.data;
+  const { id, accessLevels, ...rest } = p.data;
+  const v = { ...rest, accessLevels: accessLevels.length ? accessLevels : null };
   return mutate("settings", "write", "products", id ? "update" : "create", async (tx) => {
     if (id) {
       await tx.update(s.products).set({ ...v, updatedAt: new Date() }).where(eq(s.products.id, id));
