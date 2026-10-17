@@ -172,7 +172,7 @@ export default async function DashboardPage() {
       span: "full",
       node: (
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <KpiTile label="Ventas netas" value={formatUSD(kpis.revenue)} hint={`${formatUSD(kpis.revenueGross)} ventas brutas`} icon={TrendingUp} dot="var(--money-net)" />
+        <KpiTile label="Ventas netas" value={formatUSD(kpis.revenue)} hint={`Reconocidas · cobrado ${formatUSD(d.collected.net)} neto`} icon={TrendingUp} dot="var(--money-net)" />
         <KpiTile label="Beneficio bruto" value={formatUSD(kpis.grossProfit)} hint="Ventas netas − costo de ventas" icon={CircleDollarSign} />
         <KpiTile
           label="Margen neto"

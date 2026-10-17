@@ -214,6 +214,7 @@ export type RevenueInput = {
   status: "pending" | "available" | "paid_out" | "refunded" | "disputed";
   depositAccountId: string | null;
   memberId?: string | null;
+  serviceEnd?: string | null;
   externalId?: string | null;
   stripeChargeId?: string | null;
   taxCents?: number;
@@ -276,7 +277,10 @@ export async function syncRevenue(tx: Tx, revenueId: string) {
 
 export async function saveRevenue(tx: Tx, input: RevenueInput, id?: string) {
   const fx = await fxRateToUsd(tx, input.currency, input.revenueDate);
-  const values = { ...input, fxRateToUsd: fx, serviceStart: input.billingInterval === "one_time" ? null : (input.serviceStart ?? input.revenueDate) };
+  const serviceStart = input.billingInterval === "one_time" ? null : (input.serviceStart ?? input.revenueDate);
+  // Hasta cuándo cubre este cobro (exclusivo): lo que se reconoce como ingreso mes a mes.
+  const serviceEnd = serviceStart ? (input.serviceEnd ?? addMonthsToDate(serviceStart, INTERVAL_MONTHS[input.billingInterval as Exclude<Interval, "one_time">])) : null;
+  const values = { ...input, fxRateToUsd: fx, serviceStart, serviceEnd };
   let revenueId = id;
   if (id) {
     await tx.update(s.revenues).set({ ...values, updatedAt: new Date() }).where(eq(s.revenues.id, id));

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, Minus, Scale } from "lucide-react";
 import { requirePage } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
@@ -80,7 +81,16 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
   const from = isMonth(q.desde) ? q.desde : granularity === "month" ? shiftMonth(to, -5) : `${to.slice(0, 4)}-01`;
   const currency = q.moneda === "HNL" ? "HNL" : "USD";
 
-  const [data, fx] = await Promise.all([getDb().then(loadFinanceData), getUsdHnlRate()]);
+  const [loaded, fx] = await Promise.all([getDb().then(loadFinanceData), getUsdHnlRate()]);
+  // Base del estado de resultados y del balance: reconocido (devengado, por defecto) o cobrado (efectivo).
+  const basis = q.base === "cobrado" ? "cash" : "accrual";
+  const data = { ...loaded, basis } as typeof loaded;
+  const baseHref = (b: "reconocido" | "cobrado") => {
+    const p = new URLSearchParams(Object.entries(q).filter(([, v]) => typeof v === "string") as [string, string][]);
+    if (b === "cobrado") p.set("base", "cobrado");
+    else p.delete("base");
+    return `/reportes?${p}`;
+  };
   const rate = currency === "HNL" ? fx.hnlPerUsd : 1;
   const symbol = currency === "HNL" ? "L" : "$";
   const money = (v: number) => {
@@ -136,7 +146,35 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                   ))}
                 </div>
               )}
-              <Panel title={TERMS.incomeStatement} description={`${fxNote} Toca una línea con flecha para ver su desglose; pasa el cursor sobre un concepto para ver qué significa.`}>
+              <Panel
+                title={TERMS.incomeStatement}
+                description={`${basis === "accrual" ? "Ventas reconocidas mes a mes durante el periodo que pagan (una anual = 12 meses)." : "Ventas contadas el día que se cobraron."} ${fxNote} Toca una línea con flecha para ver su desglose.`}
+                actions={<BasisToggle basis={basis} href={baseHref} />}
+              >
+                {(() => {
+                  const cash = computePnlReport({ ...loaded, basis: "cash" }, range).total;
+                  const acc = computePnlReport({ ...loaded, basis: "accrual" }, range).total;
+                  const deferred = computeBalanceSheet({ ...loaded, basis: "accrual" }, { asOf: to >= currentMonth ? today : lastDay(to), hnlPerUsd: fx.hnlPerUsd }).liabilities.deferredRevenue;
+                  return (
+                    <div className="mb-3 grid gap-2 rounded-2xl bg-surface-2/60 p-3 text-sm sm:grid-cols-3">
+                      <p>
+                        <span className="text-xs text-muted-foreground">Cobrado en el periodo</span>
+                        <br />
+                        <span className="font-semibold tabular">{money(cash.gross)}</span>
+                      </p>
+                      <p>
+                        <span className="text-xs text-muted-foreground">Ventas reconocidas</span>
+                        <br />
+                        <span className="font-semibold tabular">{money(acc.gross)}</span>
+                      </p>
+                      <p title="Cobrado por meses de servicio que todavía no se han dado. Es un pasivo: se irá reconociendo como venta.">
+                        <span className="text-xs text-muted-foreground">Ingresos diferidos al cierre</span>
+                        <br />
+                        <span className="font-semibold tabular">{money(deferred)}</span>
+                      </p>
+                    </div>
+                  );
+                })()}
                 {r.periods.length === 0 ? (
                   <Empty>Sin datos en este rango.</Empty>
                 ) : (
@@ -302,6 +340,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                     ))}
                     {b.liabilities.ownerLoans !== 0 && <Line label="Préstamos de socios" value={b.liabilities.ownerLoans} money={money} indent />}
                     {b.liabilities.salesTaxPayable !== 0 && <Line label="Impuestos sobre ventas por remitir" value={b.liabilities.salesTaxPayable} money={money} indent />}
+                    {b.liabilities.deferredRevenue !== 0 && <Line label="Ingresos diferidos (servicio cobrado por dar)" value={b.liabilities.deferredRevenue} money={money} indent />}
                     <Line label={`Total ${TERMS.liabilities.toLowerCase()}`} value={b.liabilities.total} money={money} strong />
                   </Panel>
                   <Panel title={TERMS.equity}>
@@ -328,6 +367,24 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
             </>
           );
         })()}
+    </div>
+  );
+}
+
+/** Selector de base: reconocido (devengado) o cobrado (efectivo). */
+function BasisToggle({ basis, href }: { basis: "accrual" | "cash"; href: (b: "reconocido" | "cobrado") => string }) {
+  return (
+    <div className="flex rounded-full border bg-surface-2 p-0.5 text-xs" role="group" aria-label="Base">
+      {(
+        [
+          ["reconocido", "Reconocido", "accrual"],
+          ["cobrado", "Cobrado", "cash"],
+        ] as const
+      ).map(([key, label, b]) => (
+        <Link key={key} href={href(key)} aria-current={basis === b ? "true" : undefined} className={cn("rounded-full px-3 py-1", basis === b ? "bg-surface font-medium shadow-card" : "text-muted-foreground")}>
+          {label}
+        </Link>
+      ))}
     </div>
   );
 }

@@ -50,6 +50,7 @@ Reglas:
 - Usa solo este vocabulario contable (base NIF): ventas brutas, ventas netas, costo de ventas, beneficio bruto, gastos de operación, beneficio operativo, beneficio antes de impuestos, beneficio neto; margen bruto, operativo y neto; actividades de operación, inversión y financiamiento; activo, pasivo y capital contable. Nunca digas EBITDA, EBIT, P&L ni "utilidad".
 - "Puesta en marcha" es capital inicial del dueño gastado antes de operar: no es gasto de la operación; no lo presentes como pérdida operativa.
 - El saldo en Skool es dinero por cobrar (llega por payout), no caja.
+- Las ventas del estado de resultados son reconocidas (devengado): una anual se reparte en 12 meses. Distingue "cobrado en el mes" (dinero que entró) de "ventas reconocidas", y explica los ingresos diferidos (servicio cobrado que aún se debe dar) si son relevantes.
 - Si "churn_es_supuesto" es verdadero, aclara que el churn aún no se ha medido.
 - Si el mes no está completo ("mes_completo": false), dilo en el resumen y no compares como si lo estuviera.
 - Secciones sugeridas (omite las que no tengan datos): Estado de resultados, Comunidad y MRR, Flujo de efectivo y liquidez, Gastos de operación. Dos a cuatro puntos concretos por sección.

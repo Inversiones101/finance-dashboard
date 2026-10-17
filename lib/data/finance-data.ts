@@ -56,6 +56,7 @@ export async function loadFinanceData(db: AnyDb): Promise<FinanceData> {
       categoryId: r.categoryId,
       billingInterval: r.billingInterval,
       serviceStart: r.serviceStart,
+      serviceEnd: r.serviceEnd,
       grossCents: r.grossCents,
       processorFeeCents: r.processorFeeCents,
       affiliateFeeCents: r.affiliateFeeCents,

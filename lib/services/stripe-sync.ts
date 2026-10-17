@@ -207,6 +207,8 @@ export async function recordInvoicePaid(tx: Tx, inv: Stripe.Invoice, gw: StripeG
       memberId,
       billingInterval: isPlan ? "annual" : product.defaultBillingInterval,
       serviceStart: contract?.accessStart ?? paidDate,
+      // Plan en cuotas: cada cuota se reconoce desde su pago hasta el fin del año de acceso.
+      serviceEnd: contract ? addMonthsToDate(contract.accessStart, 12) : null,
       currency: "USD",
       grossCents,
       processorFeeCents: charge?.feeCents ?? 0,

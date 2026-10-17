@@ -2,7 +2,7 @@ import "server-only";
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { exchangeRates, settings } from "@/db/schema";
-import { computeCommunity, computeDashboard } from "@/lib/finance/engine";
+import { computeCommunity, computeDashboard, computePnlReport } from "@/lib/finance/engine";
 import { loadFinanceData } from "@/lib/data/finance-data";
 import { getUsdHnlRate } from "@/lib/fx";
 import { todayIn } from "@/lib/today";
@@ -32,6 +32,9 @@ export async function getDashboard() {
   const opts = { asOf: todayIn(BRAND.timeZone), hnlPerUsd: fx.hnlPerUsd, churnAssumption: churn / 100 };
   const dashboard = computeDashboard(data, opts);
   const community = computeCommunity(data, opts);
+  // Lo cobrado en el mes (base efectivo), junto a lo reconocido que muestran los KPIs.
+  const month = opts.asOf.slice(0, 7);
+  const collected = computePnlReport({ ...data, basis: "cash" }, { from: month, to: month, granularity: "month" }).total;
   // Aviso anticipado: la caja proyectada baja del mínimo que definiste en Proyección.
   const projection = computeProjection(data, { ...opts, minCashCents: projectionCfg.minCashCents });
   const low = projection.firstBelowMin;
@@ -46,7 +49,7 @@ export async function getDashboard() {
       ]
     : [];
   // Lo del banco primero dentro de su severidad: es lo que mantiene los demás números correctos.
-  return { ...dashboard, insights: [...cashAlert, ...bank.filter((b) => b.severity === "warning"), ...dashboard.insights, ...computeAnomalies(data, opts.asOf), ...bank.filter((b) => b.severity === "info")], community, weekly: computeWeekly(data, opts.asOf), fx };
+  return { ...dashboard, insights: [...cashAlert, ...bank.filter((b) => b.severity === "warning"), ...dashboard.insights, ...computeAnomalies(data, opts.asOf), ...bank.filter((b) => b.severity === "info")], community, weekly: computeWeekly(data, opts.asOf), collected: { gross: collected.gross, net: collected.revenue }, fx };
 }
 
 /** Churn mensual supuesto (%) para el pronóstico mientras no haya historial de bajas. */

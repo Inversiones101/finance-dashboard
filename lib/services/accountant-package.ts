@@ -77,6 +77,7 @@ export async function buildAccountantPackage(tx: Tx, { from, to, hnlPerUsd, read
 
   // ── Resumen ────────────────────────────────────────────────────────────────
   const pnl = computePnlReport(data, { from: fromMonth, to: toMonth, granularity: "month" });
+  const cashPnl = computePnlReport({ ...data, basis: "cash" }, { from: fromMonth, to: toMonth, granularity: "month" });
   const bs = computeBalanceSheet(data, { asOf: to, hnlPerUsd });
   const summary = sheet(wb, "Resumen (Summary)", [
     { header: "Concepto (Item)", key: "k", width: 48 },
@@ -91,7 +92,9 @@ export async function buildAccountantPackage(tx: Tx, { from, to, hnlPerUsd, read
     { k: "Generado (Generated)", v: new Date().toISOString().slice(0, 10) },
     { k: "Moneda (Currency)", v: "USD" },
     { k: "", v: "" },
-    { k: "Ventas brutas (Gross sales)", v: t.gross },
+    { k: "Base: devengado; ventas reconocidas en el periodo que pagan (Accrual basis)", v: "" },
+    { k: "Ventas brutas reconocidas (Gross sales, recognized)", v: t.gross },
+    { k: "Ventas brutas cobradas (Gross sales, collected — cash basis)", v: cashPnl.total.gross },
     { k: "Ventas netas (Net sales)", v: t.revenue },
     { k: "Beneficio bruto (Gross profit)", v: t.grossProfit },
     { k: "Gastos operativos (Operating expenses)", v: t.opex },
@@ -139,6 +142,8 @@ export async function buildAccountantPackage(tx: Tx, { from, to, hnlPerUsd, read
   if (bs.liabilities.payables) bsWs.addRow({ k: "  Cuentas por pagar (Payables)", v: bs.liabilities.payables });
   for (const d of bs.liabilities.debts) bsWs.addRow({ k: `  Deuda: ${d.name} (Debt)`, v: d.amount });
   if (bs.liabilities.ownerLoans) bsWs.addRow({ k: "  Préstamos del dueño (Owner loans)", v: bs.liabilities.ownerLoans });
+  if (bs.liabilities.salesTaxPayable) bsWs.addRow({ k: "  Impuestos sobre ventas por remitir (Sales tax payable)", v: bs.liabilities.salesTaxPayable });
+  if (bs.liabilities.deferredRevenue) bsWs.addRow({ k: "  Ingresos diferidos (Deferred revenue)", v: bs.liabilities.deferredRevenue });
   bold("CAPITAL CONTABLE (EQUITY)", bs.equity.total);
   bsWs.addRow({ k: "  Capital contribuido (Contributed capital)", v: bs.equity.capital });
   bsWs.addRow({ k: "  Retiros (Draws)", v: -bs.equity.draws });

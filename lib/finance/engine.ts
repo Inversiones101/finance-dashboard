@@ -43,6 +43,8 @@ export type FinanceData = {
     categoryId: string;
     billingInterval: BillingInterval;
     serviceStart: string | null;
+    /** Fin exclusivo del periodo pagado; si falta, se deduce de la frecuencia. */
+    serviceEnd?: string | null;
     grossCents: number;
     processorFeeCents: number;
     affiliateFeeCents: number;
@@ -108,6 +110,11 @@ export type FinanceData = {
    * (utilidad bruta, EBITDA, márgenes, burn); aparece en una línea aparte debajo del EBIT.
    */
   operationsStart?: string | null;
+  /**
+   * Base del estado de resultados. "accrual" (por defecto): las ventas se reconocen mes a mes
+   * durante el periodo que pagan (una anual = 12 meses). "cash": cuentan el día que se cobran.
+   */
+  basis?: "accrual" | "cash";
 };
 
 export type GoalMetric = "gross_revenue" | "net_revenue" | "net_profit" | "mrr" | "active_members" | "new_members" | "cash";
@@ -222,7 +229,37 @@ const OTHER_LABEL: Record<string, string> = {
   tax_payment: "Impuestos pagados",
 };
 
+/**
+ * Reconocimiento de una venta: el bruto se reparte en partes iguales en los meses del periodo que
+ * paga, empezando el mes en que se cobró (nunca antes: lo no cobrado no se reconoce). Cada parte
+ * lleva una fecha: el día del cobro para el primer mes y el día 1 para los siguientes.
+ */
+export function recognitionSchedule(r: FinanceData["revenues"][number]): { date: string; cents: number }[] {
+  const g = usd(r.grossCents, r.fxRateToUsd);
+  if (r.billingInterval === "one_time") return [{ date: r.date, cents: g }];
+  const start = r.serviceStart && r.serviceStart > r.date ? r.serviceStart : r.date;
+  const end = r.serviceEnd ?? addMonthsIso(r.serviceStart ?? r.date, INTERVAL_MONTHS[r.billingInterval]);
+  const [ys, ms, ds] = start.split("-").map(Number);
+  const [ye, me, de] = end.split("-").map(Number);
+  const months = Math.max(1, Math.round((ye - ys) * 12 + (me - ms) + (de - ds) / 30.44));
+  const base = Math.floor(g / months);
+  const first = monthOf(start);
+  return Array.from({ length: months }, (_, i) => ({
+    date: i === 0 ? start : `${addMonths(first, i)}-01`,
+    cents: i === months - 1 ? g - base * (months - 1) : base,
+  }));
+}
+
+function addMonthsIso(iso: string, n: number) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1 + n, 1));
+  const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  t.setUTCDate(Math.min(d, last));
+  return t.toISOString().slice(0, 10);
+}
+
 function makePnl(data: FinanceData) {
+  const accrual = data.basis !== "cash";
   const cat = new Map(data.categories.map((c) => [c.id, c]));
   const productName = new Map(data.products.map((p) => [p.id, p.name]));
   const accountById = new Map(data.accounts.map((a) => [a.id, a]));
@@ -250,12 +287,17 @@ function makePnl(data: FinanceData) {
     let gross = 0, processorFees = 0, affiliateFees = 0, cogs = 0, opex = 0, depreciation = 0, interest = 0, taxes = 0, other = 0, preOperating = 0, expenseCount = 0;
 
     for (const r of revenues) {
-      if (!inPeriod(r.date)) continue;
-      const g = usd(r.grossCents, r.fxRateToUsd);
-      gross += g;
-      processorFees += usd(r.processorFeeCents, r.fxRateToUsd);
-      affiliateFees += usd(r.affiliateFeeCents, r.fxRateToUsd);
-      add(d.revenueByProduct, (r.productId && productName.get(r.productId)) || cat.get(r.categoryId)?.name || "Sin producto", g);
+      const product = (r.productId && productName.get(r.productId)) || cat.get(r.categoryId)?.name || "Sin producto";
+      // Las comisiones son el costo de cobrar: cuentan el día del cobro en ambas bases.
+      if (inPeriod(r.date)) {
+        processorFees += usd(r.processorFeeCents, r.fxRateToUsd);
+        affiliateFees += usd(r.affiliateFeeCents, r.fxRateToUsd);
+      }
+      for (const part of accrual ? recognitionSchedule(r) : [{ date: r.date, cents: usd(r.grossCents, r.fxRateToUsd) }]) {
+        if (!inPeriod(part.date)) continue;
+        gross += part.cents;
+        add(d.revenueByProduct, product, part.cents);
+      }
     }
     for (const e of expenses) {
       if (!inPeriod(e.date)) continue;
@@ -1252,6 +1294,15 @@ export function computeBalanceSheet(data: FinanceData, { asOf, hnlPerUsd }: { as
   const ownerLoans = ownerSum("loan") - ownerSum("reimbursement");
   // Impuesto sobre ventas cobrado a clientes (Stripe): es dinero de la autoridad fiscal, no de la LLC.
   const salesTaxPayable = sum(data.movements.filter((m) => m.type === "sales_tax_collected" && m.date <= asOf).map((m) => usd(m.amountCents, m.fxRateToUsd)));
+  // Ingresos diferidos: lo cobrado por servicio que todavía no se ha dado (se reconoce mes a mes).
+  const deferredRevenue =
+    data.basis === "cash"
+      ? 0
+      : sum(
+          data.revenues
+            .filter((r) => r.status !== "refunded" && r.status !== "disputed" && r.date <= asOf)
+            .map((r) => sum(recognitionSchedule(r).filter((p) => p.date > asOf).map((p) => p.cents)))
+        );
 
   // Patrimonio
   const lines = makePnl(data);
@@ -1263,7 +1314,7 @@ export function computeBalanceSheet(data: FinanceData, { asOf, hnlPerUsd }: { as
   const draws = ownerSum("draw");
 
   const totalAssets = sum(cash.map((c) => c.amount)) + sum(platforms.map((p) => p.amount)) + receivables;
-  const totalLiabilities = sum(cards.map((c) => c.amount)) + payables + sum(debts.map((d) => d.amount)) + ownerLoans + salesTaxPayable;
+  const totalLiabilities = sum(cards.map((c) => c.amount)) + payables + sum(debts.map((d) => d.amount)) + ownerLoans + salesTaxPayable + deferredRevenue;
   const totalEquity = capital - draws + retained - preOperating + openingBalances;
 
   const list = (xs: { name: string; amount: number }[]) => xs.map((x) => ({ name: x.name, amount: toDollars(x.amount) }));
@@ -1281,6 +1332,7 @@ export function computeBalanceSheet(data: FinanceData, { asOf, hnlPerUsd }: { as
       debts: list(debts),
       ownerLoans: toDollars(ownerLoans),
       salesTaxPayable: toDollars(salesTaxPayable),
+      deferredRevenue: toDollars(deferredRevenue),
       total: toDollars(totalLiabilities),
     },
     equity: {

@@ -6,7 +6,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import * as schema from "@/db/schema";
 import { seed } from "@/db/seed";
 import { loadFinanceData } from "@/lib/data/finance-data";
-import { computeBalanceSheet, computeBudgets, computeCashFlow, computeDashboard, computeGoals, computePnlReport, type Dashboard, type FinanceData } from "@/lib/finance/engine";
+import { computeBalanceSheet, computeBudgets, computeCashFlow, computeDashboard, computeGoals, computePnlReport, recognitionSchedule, type Dashboard, type FinanceData } from "@/lib/finance/engine";
 
 /** Corre migraciones + siembra en un Postgres en memoria y verifica el motor contra números conocidos. */
 let data: FinanceData;
@@ -16,7 +16,8 @@ beforeAll(async () => {
   const db = drizzle(new PGlite(), { schema });
   await migrate(db, { migrationsFolder: path.join(__dirname, "..", "db", "migrations") });
   await seed(db);
-  data = await loadFinanceData(db);
+  // Estas pruebas cuadran con el panel de Skool, que muestra lo cobrado: base de efectivo.
+  data = { ...(await loadFinanceData(db)), basis: "cash" };
   d = computeDashboard(data, { asOf: "2026-09-22", hnlPerUsd: 26.86 });
 });
 
@@ -197,5 +198,43 @@ describe("Genérico: datos nuevos no requieren código", () => {
     const r = computeDashboard(extra, { asOf: "2026-09-22", hnlPerUsd: 26.86 });
     expect(r.liabilities.debtTotal).toBe(1000);
     expect(r.upcoming.some((u) => u.kind === "debt" && u.amount === 105)).toBe(true);
+  });
+});
+
+describe("Reconocimiento de ingresos (base devengada, la de los reportes)", () => {
+  const accrual = () => ({ ...data, basis: "accrual" as const });
+  const rev = (over: Partial<FinanceData["revenues"][number]>): FinanceData["revenues"][number] => ({
+    date: "2026-09-16", productId: null, categoryId: data.revenues[0].categoryId, billingInterval: "annual", serviceStart: "2026-09-16",
+    grossCents: 19700, processorFeeCents: 600, affiliateFeeCents: 0, fxRateToUsd: 1, status: "available", ...over,
+  });
+
+  it("una anual de $197 se reconoce $16.42 por mes durante 12 meses y suma exacto", () => {
+    const parts = recognitionSchedule(rev({}));
+    expect(parts).toHaveLength(12);
+    expect(parts[0]).toEqual({ date: "2026-09-16", cents: 1641 });
+    expect(parts[1].date).toBe("2026-10-01");
+    expect(parts.reduce((a, p) => a + p.cents, 0)).toBe(19700);
+  });
+
+  it("una mensual cuenta en su mes; una cuota de plan se reparte hasta el fin del año de acceso, nunca antes de cobrarse", () => {
+    expect(recognitionSchedule(rev({ billingInterval: "monthly", grossCents: 3700 }))).toEqual([{ date: "2026-09-16", cents: 3700 }]);
+    // 2.ª cuota pagada el 10 nov de un plan con acceso 10 oct → 10 oct del año siguiente: 11 meses desde noviembre.
+    const second = recognitionSchedule(rev({ date: "2026-11-10", serviceStart: "2026-10-10", serviceEnd: "2027-10-10", grossCents: 6633 }));
+    expect(second).toHaveLength(11);
+    expect(second[0].date).toBe("2026-11-10");
+  });
+
+  it("septiembre muestra menos ventas que lo cobrado; las comisiones cuentan al cobrar; el balance cuadra con ingresos diferidos", () => {
+    const cash = computePnlReport(data, { from: "2026-09", to: "2026-09", granularity: "month" }).total;
+    const acc = computePnlReport(accrual(), { from: "2026-09", to: "2026-09", granularity: "month" }).total;
+    expect(acc.gross).toBeLessThan(cash.gross);
+    expect(acc.processorFees).toBe(cash.processorFees);
+    const year = computePnlReport(accrual(), { from: "2026-09", to: "2027-09", granularity: "month" }).total;
+    expect(year.gross).toBe(cash.gross); // en el año completo suma lo mismo
+    for (const asOf of ["2026-09-30", "2026-12-31"]) {
+      const bs = computeBalanceSheet(accrual(), { asOf, hnlPerUsd: 26.86 });
+      expect(bs.liabilities.deferredRevenue).toBeGreaterThan(0);
+      expect(bs.difference).toBe(0);
+    }
   });
 });
