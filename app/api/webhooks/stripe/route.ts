@@ -17,6 +17,9 @@ export async function POST(req: Request) {
   } catch {
     return new Response("Firma inválida", { status: 400 });
   }
+  // Con claves reales, los eventos de prueba nunca entran a los libros (y viceversa).
+  const liveKey = /^(sk|rk)_live_/.test(process.env.STRIPE_SECRET_KEY ?? "");
+  if (event.livemode !== liveKey) return Response.json({ received: true, result: "ignored_mode" });
   try {
     const db = await getDb();
     const result = await db.transaction(async (t) => {
