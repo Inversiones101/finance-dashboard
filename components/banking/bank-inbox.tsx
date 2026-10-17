@@ -6,6 +6,7 @@ import {
   Check,
   CheckCheck,
   CircleCheck,
+  CreditCard,
   Landmark,
   Link2,
   RefreshCw,
@@ -32,6 +33,7 @@ const EXTRA_LABEL: Record<string, string> = {
   match: "Ya está registrado (solo enlazar)",
   transfer: "Transferencia entre mis cuentas",
   payout: "Payout de Skool",
+  card_payment: "Pago de la tarjeta Mercury IO (no es gasto)",
   ignore: "Ignorar (no registrar)",
 };
 
@@ -40,6 +42,7 @@ const SUGGESTION: Record<InboxAs, { label: string; icon: LucideIcon }> = {
   match: { label: "Ya registrado", icon: Link2 },
   transfer: { label: "Transferencia", icon: ArrowLeftRight },
   payout: { label: "Payout de Skool", icon: Store },
+  card_payment: { label: "Pago de tarjeta IO", icon: CreditCard },
   owner_contribution: { label: "Aporte del dueño", icon: ArrowDownLeft },
   owner_draw: { label: "Retiro del dueño", icon: ArrowUpRight },
   revenue: { label: "Ingreso", icon: ArrowDownLeft },
@@ -192,7 +195,7 @@ export async function BankInbox({ o, canWrite }: { o: FormOptions; canWrite: boo
                   const ready = !!sug && !(sug.as === "expense" && !sug.categoryId);
                   const inflow = i.amountCents > 0;
                   const Kind = sug ? SUGGESTION[sug.as].icon : inflow ? ArrowDownLeft : ArrowUpRight;
-                  const extra = [...(sug?.as === "match" ? ["match"] : []), ...(sug?.as === "transfer" ? ["transfer"] : []), ...(inflow ? ["payout"] : []), "ignore"].map((v) => ({
+                  const extra = [...(sug?.as === "match" ? ["match"] : []), ...(sug?.as === "transfer" ? ["transfer"] : []), ...(inflow ? ["payout"] : ["card_payment"]), "ignore"].map((v) => ({
                     value: v,
                     label: EXTRA_LABEL[v],
                   }));

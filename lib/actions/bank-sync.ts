@@ -24,7 +24,7 @@ export async function syncBankAction(): Promise<ActionResult> {
 
 const resolveSchema = z.object({
   id: zId,
-  as: z.enum(["owner_contribution", "owner_draw", "revenue", "expense", "other_income", "bank_fee", "adjustment", "match", "transfer", "payout", "ignore"]),
+  as: z.enum(["owner_contribution", "owner_draw", "revenue", "expense", "other_income", "bank_fee", "adjustment", "match", "transfer", "payout", "card_payment", "ignore"]),
   description: zOptText,
   categoryId: zOptId,
   productId: zOptId,

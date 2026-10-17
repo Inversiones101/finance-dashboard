@@ -8,7 +8,9 @@ import * as s from "@/db/schema";
 import { seed } from "@/db/seed";
 import type { BankClient, MercuryTransaction } from "@/lib/mercury/client";
 import { acceptAllSuggestions, resolveInboxItem, syncBank, type Suggestion } from "@/lib/services/bank-sync";
-import { accountBalanceCents, saveRevenue, type Tx } from "@/lib/services/ledger";
+import { accountBalanceCents, deleteExpense, saveExpense, saveRevenue, type Tx } from "@/lib/services/ledger";
+import { loadFinanceData } from "@/lib/data/finance-data";
+import { computeBalanceSheet } from "@/lib/finance/engine";
 
 const TODAY = "2026-09-25";
 let db: Tx;
@@ -113,5 +115,50 @@ describe("sincronización con Mercury", () => {
     expect(await accountBalanceCents(db, acc["Mercury Checking"].id, TODAY)).toBe(20000);
     expect(await accountBalanceCents(db, acc["Mercury Savings"].id, TODAY)).toBe(10000);
     expect(await accountBalanceCents(db, acc["Saldo Skool"].id, TODAY)).toBe(skoolBefore - 30000);
+  });
+});
+
+describe("pago diario de la tarjeta Mercury IO desde Checking", () => {
+  it("no es un gasto: liquida el cargo de la IO; la bandeja lo sugiere aunque haya una regla de gasto", async () => {
+    const [io] = await db.select().from(s.financialAccounts).where(eq(s.financialAccounts.name, "Mercury IO"));
+    await db.update(s.financialAccounts).set({ status: "active" }).where(eq(s.financialAccounts.id, io.id));
+    const [software] = await db.select().from(s.categories).where(eq(s.categories.kind, "opex")).limit(1);
+    // Una regla aprendida por error ("Mercury Credit" → gasto) no debe ganar.
+    await db.insert(s.classificationRules).values({ pattern: "mercury credit", as: "expense", categoryId: software.id });
+    const loom = await saveExpense(db, {
+      expenseDate: "2026-10-11", description: "Loom", categoryId: software.id, vendorId: null, frequency: "monthly", currency: "USD",
+      amountCents: 2400, paymentAccountId: io.id, status: "pending", dueDate: null, paidOn: null, notes: null,
+    });
+    const opexBefore = (await db.select().from(s.expenses)).length;
+
+    await syncBank(db, fake({ "m-chk": [t("io1", -24, "2026-10-12", "Mercury Credit")] }), "2026-10-13");
+    const [item] = await inbox();
+    expect((item.suggestion as Suggestion).as).toBe("card_payment");
+    await acceptAllSuggestions(db, null);
+
+    expect((await db.select().from(s.expenses)).length).toBe(opexBefore); // ningún gasto nuevo
+    const [paid] = await db.select().from(s.expenses).where(eq(s.expenses.id, loom));
+    expect(paid).toMatchObject({ status: "paid", paidOn: "2026-10-12" });
+    expect(await accountBalanceCents(db, acc["Mercury Checking"].id, "2026-10-13")).toBe(-2400);
+    const bs = computeBalanceSheet(await loadFinanceData(db), { asOf: "2026-10-31", hnlPerUsd: 26.9 });
+    expect(bs.liabilities.cards).toEqual([]); // la IO quedó en cero
+    expect(bs.difference).toBe(0);
+  });
+
+  it("si no hay cargos de la IO que cuadren, no inventa nada y lo explica", async () => {
+    await syncBank(db, fake({ "m-chk": [t("io2", -24, "2026-10-12", "Mercury Credit")] }), "2026-10-13");
+    const [item] = await inbox();
+    await expect(resolveInboxItem(db, item.id, { as: "card_payment" }, null)).rejects.toThrow(/No encontré cargos pendientes/);
+  });
+
+  it("borrar un gasto creado desde la bandeja la devuelve a 'Por clasificar'", async () => {
+    const [software] = await db.select().from(s.categories).where(eq(s.categories.kind, "opex")).limit(1);
+    await syncBank(db, fake({ "m-chk": [t("x1", -24, "2026-10-13", "Algo")] }), "2026-10-13");
+    const [item] = await inbox();
+    await resolveInboxItem(db, item.id, { as: "expense", categoryId: software.id, description: "Por error" }, null);
+    const [exp] = await db.select().from(s.expenses).where(eq(s.expenses.description, "Por error"));
+    await deleteExpense(db, exp.id);
+    const [again] = await inbox();
+    expect(again.status).toBe("pending");
   });
 });

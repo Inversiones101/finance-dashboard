@@ -181,6 +181,18 @@ export async function deleteExpense(tx: Tx, id: string) {
   await tx.delete(s.ownerLedger).where(eq(s.ownerLedger.expenseId, id));
   await tx.delete(s.cashMovements).where(eq(s.cashMovements.expenseId, id));
   await tx.delete(s.expenses).where(eq(s.expenses.id, id));
+  await reopenOrphanInbox(tx);
+}
+
+/**
+ * Si se borra el registro que se creó desde la bandeja de Mercury, la transacción del banco
+ * vuelve a "Por clasificar" (el banco sí la tiene) para clasificarla bien.
+ */
+export async function reopenOrphanInbox(tx: Tx) {
+  await tx
+    .update(s.bankInbox)
+    .set({ status: "pending", updatedAt: new Date() })
+    .where(and(eq(s.bankInbox.status, "classified"), sql`${s.bankInbox.cashMovementId} is null`));
 }
 
 // ── Ingresos ─────────────────────────────────────────────────────────────────
@@ -277,6 +289,66 @@ export async function deleteRevenue(tx: Tx, id: string) {
   await tx.delete(s.cashMovements).where(eq(s.cashMovements.revenueId, id));
   await tx.delete(s.ownerLedger).where(eq(s.ownerLedger.revenueId, id));
   await tx.delete(s.revenues).where(eq(s.revenues.id, id));
+  await reopenOrphanInbox(tx);
+}
+
+/**
+ * Pago de la tarjeta de la LLC que llega por el banco (Mercury IO se paga sola cada día desde
+ * Checking). No es gasto: liquida cargos ya registrados con la tarjeta. Busca los cargos
+ * pendientes que sumen exactamente el monto; si no los encuentra, no inventa nada.
+ * Sin cashback estimado: Mercury lo deposita aparte y entra por la bandeja.
+ */
+export async function settleCardFromBank(tx: Tx, p: { cardId: string; bankAccountId: string; date: string; amountCents: number; externalId: string; userId?: string | null }) {
+  const card = await account(tx, p.cardId);
+  const pending = await tx
+    .select()
+    .from(s.expenses)
+    .where(and(eq(s.expenses.paymentAccountId, p.cardId), eq(s.expenses.fundingSource, "llc_credit"), eq(s.expenses.status, "pending"), lte(s.expenses.expenseDate, p.date)))
+    .orderBy(asc(s.expenses.expenseDate));
+  const usdOf = (e: (typeof pending)[number]) => toUsdCents(e.amountCents, e.fxRateToUsd);
+
+  // 1) todo lo pendiente; 2) los más antiguos hasta cuadrar; 3) cualquier combinación (pocos cargos).
+  let chosen: typeof pending | null = null;
+  if (pending.reduce((a, e) => a + usdOf(e), 0) === p.amountCents) chosen = pending;
+  if (!chosen) {
+    let acc = 0;
+    for (let i = 0; i < pending.length && !chosen; i++) {
+      acc += usdOf(pending[i]);
+      if (acc === p.amountCents) chosen = pending.slice(0, i + 1);
+    }
+  }
+  if (!chosen && pending.length <= 14) {
+    for (let mask = 1; mask < 1 << pending.length && !chosen; mask++) {
+      const pick = pending.filter((_, i) => mask & (1 << i));
+      if (pick.reduce((a, e) => a + usdOf(e), 0) === p.amountCents) chosen = pick;
+    }
+  }
+  if (!chosen) {
+    const total = pending.reduce((a, e) => a + usdOf(e), 0);
+    throw new Error(
+      `No encontré cargos pendientes de ${card.name} que sumen ${(p.amountCents / 100).toFixed(2)} USD` +
+        (pending.length ? ` (hay ${pending.length} por ${(total / 100).toFixed(2)} USD).` : ".") +
+        ` Registra el gasto con ${card.name} como "Por pagar" y vuelve a clasificar este pago.`
+    );
+  }
+  await tx
+    .update(s.expenses)
+    .set({ status: "paid", paidOn: p.date, updatedAt: new Date() })
+    .where(inArray(s.expenses.id, chosen.map((e) => e.id)));
+  const [mov] = await tx
+    .insert(s.cashMovements)
+    .values({
+      accountId: p.bankAccountId,
+      movementDate: p.date,
+      type: "card_payment",
+      amountCents: -p.amountCents,
+      currency: "USD",
+      externalId: p.externalId,
+      description: `Pago ${card.name}: ${chosen.map((e) => e.description).join(", ")}`.slice(0, 200),
+      createdBy: p.userId ?? null,
+    })
+    .returning({ id: s.cashMovements.id });
+  return { movementId: mov.id, settled: chosen.length };
 }
 
 // ── Tarjetas de la LLC (Mercury IO) ─────────────────────────────────────────

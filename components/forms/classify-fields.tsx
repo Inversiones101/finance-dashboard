@@ -21,6 +21,7 @@ const HINT: Record<string, string> = {
   owner_draw: "Dinero que sacas de la LLC para ti. Reduce tu capital.",
   bank_fee: "Comisiones del banco: gasto operativo.",
   adjustment: "Déjalo como ajuste solo si es una diferencia de conciliación.",
+  card_payment: "Mercury IO se paga sola desde Checking: este débito liquida cargos ya registrados con la tarjeta. No es un gasto nuevo.",
   payout: "Dinero que Skool te pasa al banco: baja el saldo de Skool y sube el del banco. No es ingreso nuevo (ya se contó al cobrar).",
   match: "Ya lo registraste a mano: solo se enlaza con el banco, sin duplicarlo.",
   transfer: "Movimiento entre tus propias cuentas: no es ingreso ni gasto.",

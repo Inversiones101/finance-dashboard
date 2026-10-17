@@ -13,9 +13,12 @@ import * as s from "@/db/schema";
 import { normName } from "@/lib/import/skool-csv";
 import type { BankClient } from "@/lib/mercury/client";
 import { errorMessage } from "@/lib/actions/result";
-import { accountBalanceCents, addMonthsToDate, classifyMovement, payout, transfer, type MovementClass, type Tx } from "./ledger";
+import { accountBalanceCents, addMonthsToDate, classifyMovement, payout, settleCardFromBank, transfer, type MovementClass, type Tx } from "./ledger";
 
-export type InboxAs = MovementClass | "match" | "transfer" | "payout";
+/** Débito del banco que paga la tarjeta de la LLC (Mercury IO): "Mercury Credit", "IO card payment"… */
+const CARD_PAYMENT = /mercury (credit|io)|\bio (card )?(payment|pago|autopay)|credit card payment|card payment|autopay/;
+
+export type InboxAs = MovementClass | "match" | "transfer" | "payout" | "card_payment";
 export type Suggestion = {
   as: InboxAs;
   label: string;
@@ -139,6 +142,10 @@ export async function refreshSuggestions(tx: Tx) {
       if (pair) sug = { as: "transfer", pairId: pair.id, label: "Transferencia entre tus cuentas" };
     }
 
+    // b2) Pago de la tarjeta de la LLC (Mercury IO se cobra sola desde Checking): nunca es gasto.
+    //     Va antes que las reglas para corregir clasificaciones aprendidas por error.
+    if (!sug && item.amountCents < 0 && CARD_PAYMENT.test(text)) sug = { as: "card_payment", label: "Pago de la tarjeta Mercury IO (no es gasto)" };
+
     // c) Regla aprendida por contraparte.
     if (!sug) {
       const rule = rules.filter((r) => text.includes(r.pattern)).sort((a, b) => b.pattern.length - a.pattern.length)[0];
@@ -205,6 +212,20 @@ export async function resolveInboxItem(tx: Tx, id: string, r: Resolution, userId
       await tx.update(s.cashMovements).set({ externalId: side.externalId }).where(eq(s.cashMovements.id, m.id));
       await done(tx, side.id, m.id, userId);
     }
+    return;
+  }
+
+  if (r.as === "card_payment") {
+    if (i.amountCents >= 0) throw new Error("El pago de una tarjeta es dinero que sale del banco.");
+    const cards = await tx
+      .select()
+      .from(s.financialAccounts)
+      .where(and(eq(s.financialAccounts.type, "credit_card"), eq(s.financialAccounts.owner, "llc")))
+      .orderBy(asc(s.financialAccounts.sortOrder));
+    const card = cards.find((c) => c.institution?.toLowerCase() === "mercury") ?? cards[0];
+    if (!card) throw new Error("No hay una tarjeta de la LLC registrada en Cuentas.");
+    const r2 = await settleCardFromBank(tx, { cardId: card.id, bankAccountId: i.accountId, date: i.postedOn, amountCents: -i.amountCents, externalId: i.externalId, userId });
+    await done(tx, i.id, r2.movementId, userId);
     return;
   }
 
