@@ -161,4 +161,23 @@ describe("pago diario de la tarjeta Mercury IO desde Checking", () => {
     const [again] = await inbox();
     expect(again.status).toBe("pending");
   });
+
+  it("al volver a la bandeja, la sugerencia se recalcula (no se reutiliza la vieja)", async () => {
+    const [software] = await db.select().from(s.categories).where(eq(s.categories.kind, "opex")).limit(1);
+    const [io] = await db.select().from(s.financialAccounts).where(eq(s.financialAccounts.name, "Mercury IO"));
+    await saveExpense(db, {
+      expenseDate: "2026-10-11", description: "Loom", categoryId: software.id, vendorId: null, frequency: "monthly", currency: "USD",
+      amountCents: 2400, paymentAccountId: io.id, status: "pending", dueDate: null, paidOn: null, notes: null,
+    });
+    await syncBank(db, fake({ "m-chk": [t("io3", -24, "2026-10-13", "Mercury Credit")] }), "2026-10-13");
+    const [item] = await inbox();
+    // Simula la clasificación vieja como gasto, con su sugerencia guardada.
+    await resolveInboxItem(db, item.id, { as: "expense", categoryId: software.id, description: "Loom" }, null);
+    await db.update(s.bankInbox).set({ suggestion: { as: "expense", categoryId: software.id, label: "vieja" } }).where(eq(s.bankInbox.id, item.id));
+    const [dup] = await db.select().from(s.expenses).where(eq(s.expenses.expenseDate, "2026-10-13"));
+    await deleteExpense(db, dup.id);
+    const [again] = await inbox();
+    expect(again.status).toBe("pending");
+    expect((again.suggestion as Suggestion).as).toBe("card_payment");
+  });
 });

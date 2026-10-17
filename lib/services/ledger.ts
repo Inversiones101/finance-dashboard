@@ -191,8 +191,11 @@ export async function deleteExpense(tx: Tx, id: string) {
 export async function reopenOrphanInbox(tx: Tx) {
   await tx
     .update(s.bankInbox)
-    .set({ status: "pending", updatedAt: new Date() })
+    .set({ status: "pending", suggestion: null, updatedAt: new Date() })
     .where(and(eq(s.bankInbox.status, "classified"), sql`${s.bankInbox.cashMovementId} is null`));
+  // La sugerencia se recalcula con las reglas actuales (import dinámico: bank-sync depende de este módulo).
+  const { refreshSuggestions } = await import("./bank-sync");
+  await refreshSuggestions(tx);
 }
 
 // ── Ingresos ─────────────────────────────────────────────────────────────────
