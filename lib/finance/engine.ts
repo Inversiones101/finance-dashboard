@@ -23,6 +23,8 @@ export type FundingSource = "llc_cash" | "llc_credit" | "owner_personal";
 export type AccountType = "checking" | "savings" | "credit_card" | "processor" | "cash";
 
 export type FinanceData = {
+  /** Hoy: un servicio contratado se reconoce solo hasta este día (lo recibido). */
+  asOf?: string;
   categories: { id: string; name: string; kind: CategoryKind; pnlLine?: PnlLine; isContraRevenue?: boolean }[];
   products: { id: string; name: string; listPriceCents?: number | null }[];
   accounts: {
@@ -267,8 +269,9 @@ function addMonthsIso(iso: string, n: number) {
  * Servicio contratado con periodo (ej. una mentoría del 14 ago al 14 dic): su costo total se
  * reconoce día a día dentro del periodo (US GAAP), partido por mes y por antes/después del inicio
  * de operaciones (lo de antes es puesta en marcha). Cada parte lleva la fecha de su primer día.
+ * Con `asOf`, también corta en ese día: lo posterior es servicio aún no recibido y no se reconoce.
  */
-export function contractRecognition(ct: FinanceData["contracts"][number], operationsStart: string | null | undefined) {
+export function contractRecognition(ct: FinanceData["contracts"][number], operationsStart: string | null | undefined, asOf?: string) {
   if (!ct.serviceStart || !ct.serviceEnd || ct.serviceEnd < ct.serviceStart || ct.status === "canceled") return [];
   const day = 86_400_000;
   const toMs = (d: string) => Date.parse(`${d}T00:00:00Z`);
@@ -287,11 +290,15 @@ export function contractRecognition(ct: FinanceData["contracts"][number], operat
     const ops = toMs(operationsStart);
     if (ops > startMs && ops < endMs) cuts.add(ops);
   }
+  if (asOf) {
+    const next = toMs(asOf) + day;
+    if (next > startMs && next < endMs) cuts.add(next);
+  }
   const points = [...cuts].sort((a, b) => a - b);
   const parts = points.slice(0, -1).map((from, i) => {
     const days = Math.round((points[i + 1] - from) / day);
     const date = iso(from);
-    return { date, days, preOperating: !!operationsStart && date < operationsStart, cents: Math.round((total * days) / totalDays) };
+    return { date, days, received: !asOf || date <= asOf, preOperating: !!operationsStart && date < operationsStart, cents: Math.round((total * days) / totalDays) };
   });
   const drift = total - parts.reduce((a, p) => a + p.cents, 0);
   if (parts.length) parts[parts.length - 1].cents += drift;
@@ -346,8 +353,8 @@ function makePnl(data: FinanceData) {
     for (const ct of periodContracts.values()) {
       const c = ct.categoryId ? cat.get(ct.categoryId) : undefined;
       const name = c?.name ?? ct.name;
-      for (const part of contractRecognition(ct, data.operationsStart)) {
-        if (!inPeriod(part.date)) continue;
+      for (const part of contractRecognition(ct, data.operationsStart, data.asOf)) {
+        if (!part.received || !inPeriod(part.date)) continue;
         if (part.preOperating) {
           preOperating += part.cents;
           add(d.preOperatingByCategory, name, part.cents);
@@ -1369,7 +1376,7 @@ export function computeBalanceSheet(data: FinanceData, { asOf, hnlPerUsd }: { as
   let accruedExpenses = 0;
   if (data.basis !== "cash") {
     for (const ct of data.contracts) {
-      const parts = contractRecognition(ct, data.operationsStart);
+      const parts = contractRecognition(ct, data.operationsStart, asOf);
       if (!parts.length) continue;
       const recognized = sum(parts.filter((p) => p.date <= asOf).map((p) => p.cents));
       const settled = sum(data.expenses.filter((e) => e.contractId === ct.id && e.status !== "void" && e.date <= asOf).map((e) => usd(e.amountCents, e.fxRateToUsd)));

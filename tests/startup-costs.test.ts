@@ -52,7 +52,7 @@ describe("puesta en marcha", () => {
 describe("contrato con periodo de servicio (US GAAP)", () => {
   it("reparte el costo por día entre puesta en marcha y operación, y el balance cuadra", async () => {
     await db.update(s.vendorContracts).set({ totalCents: 773_000, serviceStart: "2026-08-14", serviceEnd: "2026-12-14" }).where(eq(s.vendorContracts.id, contract.id));
-    const data = await loadFinanceData(db);
+    const data = { ...(await loadFinanceData(db)), asOf: "2026-12-31" };
     const ct = data.contracts.find((c) => c.id === contract.id)!;
     const { contractRecognition } = await import("@/lib/finance/engine");
     const parts = contractRecognition(ct, "2026-09-20");
@@ -65,5 +65,15 @@ describe("contrato con periodo de servicio (US GAAP)", () => {
     for (const asOf of ["2026-08-31", "2026-09-30", "2026-10-31", "2026-12-31"]) {
       expect(computeBalanceSheet(data, { asOf, hnlPerUsd: 25 }).difference).toBeCloseTo(0, 2);
     }
+  });
+});
+
+describe("mes en curso", () => {
+  it("el contrato se reconoce solo hasta hoy, no el mes completo", async () => {
+    await db.update(s.vendorContracts).set({ totalCents: 773_000, serviceStart: "2026-08-14", serviceEnd: "2026-12-14" }).where(eq(s.vendorContracts.id, contract.id));
+    const data = { ...(await loadFinanceData(db)), asOf: "2026-11-02" };
+    const nov = computePnlReport(data, { from: "2026-11", to: "2026-11", granularity: "month" }).total;
+    expect(Math.round((nov.opex + nov.cogs) * 100)).toBeLessThan(15_000); // 2 días ≈ $126, no $1,885
+    expect(computeBalanceSheet(data, { asOf: "2026-11-02", hnlPerUsd: 25 }).difference).toBeCloseTo(0, 2);
   });
 });

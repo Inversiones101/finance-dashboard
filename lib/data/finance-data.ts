@@ -2,6 +2,7 @@ import { eq, isNull } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import * as s from "@/db/schema";
 import type { FinanceData } from "@/lib/finance/engine";
+import { todayIn } from "@/lib/today";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDb = PgDatabase<PgQueryResultHKT, typeof s, any>;
@@ -36,6 +37,7 @@ export async function loadFinanceData(db: AnyDb): Promise<FinanceData> {
   const llcIds = new Set(accounts.filter((a) => a.owner === "llc").map((a) => a.id));
 
   return {
+    asOf: todayIn(),
     categories: categories.map((c) => ({ id: c.id, name: c.name, kind: c.kind, pnlLine: c.pnlLine, isContraRevenue: c.isContraRevenue })),
     products: products.map((p) => ({ id: p.id, name: p.name, listPriceCents: p.listPriceCents })),
     accounts: accounts.map((a) => ({

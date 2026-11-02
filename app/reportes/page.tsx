@@ -135,7 +135,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                   ).map(([label, key]) => (
                     <div key={key} className="rounded-2xl border bg-surface p-4 shadow-card">
                       <p className="text-xs text-muted-foreground">
-                        {label} · {last.label}
+                        {label} · {last.label}{last.key === currentMonth ? " (en curso)" : ""}
                       </p>
                       <p className={cn("font-heading text-2xl font-bold tabular", last[key] < 0 && "text-money-out-text")}>{money(last[key])}</p>
                       <div className="mt-1 flex flex-wrap gap-x-3">
@@ -180,7 +180,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                 ) : (
                   <PnlTable
                     rows={PNL_ROWS}
-                    periods={r.periods.map((p) => toPeriod(p, p.key, p.label))}
+                    periods={r.periods.map((p) => toPeriod(p, p.key, p.key === currentMonth ? `${p.label} (en curso)` : p.label))}
                     total={r.periods.length > 1 ? toPeriod(r.total, "total", "Total") : null}
                     rate={rate}
                     symbol={symbol}
@@ -198,7 +198,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                   ).map(([label, v]) => (
                     <div key={label} className="rounded-2xl border bg-surface px-4 py-3 shadow-card">
                       <p className="text-xs text-muted-foreground">
-                        {label} · {last.label}
+                        {label} · {last.label}{last.key === currentMonth ? " (en curso)" : ""}
                       </p>
                       <p className="font-heading text-xl font-bold tabular">{v === null ? "—" : formatPct(v)}</p>
                     </div>
