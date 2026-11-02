@@ -14,10 +14,10 @@ import type { Tx } from "./ledger";
 
 const PNL_EN: Record<string, string> = {
   gross: "Gross sales",
-  processorFees: "Platform fees",
+  processorFees: "Payment platform fees (cost of sales)",
   affiliateFees: "Affiliate fees",
   revenue: "Net sales",
-  cogs: "Cost of sales",
+  cogs: "Other cost of sales",
   grossProfit: "Gross profit",
   opex: "Operating expenses",
   depreciation: "Depreciation & amortization",
@@ -27,7 +27,8 @@ const PNL_EN: Record<string, string> = {
   ebt: "Profit before tax",
   taxes: "Income taxes",
   netProfit: "Net profit",
-  preOperating: "Memo: start-up costs paid with owner capital (excluded from net profit)",
+  preOperating: "Start-up costs (ASC 720-15)",
+  returns: "Sales returns & discounts",
 };
 
 const FUNDING: Record<string, string> = { llc_cash: "Caja LLC (LLC cash)", llc_credit: "Tarjeta LLC (LLC card)", owner_personal: "Aporte del dueño (owner-paid)" };
@@ -148,7 +149,6 @@ export async function buildAccountantPackage(tx: Tx, { from, to, hnlPerUsd, read
   bsWs.addRow({ k: "  Capital contribuido (Contributed capital)", v: bs.equity.capital });
   bsWs.addRow({ k: "  Retiros (Draws)", v: -bs.equity.draws });
   bsWs.addRow({ k: "  Resultados acumulados (Retained earnings)", v: bs.equity.retained });
-  if (bs.equity.preOperating) bsWs.addRow({ k: "  Puesta en marcha (Start-up costs)", v: -bs.equity.preOperating });
   if (bs.equity.openingBalances) bsWs.addRow({ k: "  Saldos iniciales (Opening balances)", v: bs.equity.openingBalances });
   bsWs.addRow({ k: "Diferencia (debe ser 0) (Check, should be 0)", v: bs.difference });
 

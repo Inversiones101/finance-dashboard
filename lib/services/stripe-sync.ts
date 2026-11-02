@@ -318,7 +318,11 @@ export async function limitInstallmentSubscription(tx: Tx, sub: Stripe.Subscript
 export async function recordRefund(tx: Tx, charge: Stripe.Charge, today: string) {
   const [rev] = await tx.select().from(s.revenues).where(eq(s.revenues.stripeChargeId, charge.id));
   if (!rev) return { kind: "skip" as const };
-  if (charge.refunded || charge.amount_refunded >= charge.amount) {
+  // Si el mes del cobro ya está cerrado, no se toca: el reembolso va como devolución sobre ventas
+  // con fecha de hoy (abajo, igual que uno parcial).
+  const closed = await tx.select().from(s.settings).where(eq(s.settings.key, "books_closed_through"));
+  const monthClosed = typeof closed[0]?.value === "string" && rev.revenueDate.slice(0, 7) <= (closed[0].value as string);
+  if ((charge.refunded || charge.amount_refunded >= charge.amount) && !monthClosed) {
     if (rev.status !== "refunded") {
       await tx.update(s.revenues).set({ status: "refunded", updatedAt: new Date() }).where(eq(s.revenues.id, rev.id));
       await syncRevenue(tx, rev.id);
@@ -331,14 +335,15 @@ export async function recordRefund(tx: Tx, charge: Stripe.Charge, today: string)
     }
     return { kind: "refunded" as const };
   }
-  // Parcial: lo nuevo desde el último registro, como gasto pagado desde el saldo de Stripe.
+  // Parcial (o de un mes cerrado): lo nuevo desde el último registro, como devolución sobre ventas
+  // (categoría "Descuentos y reembolsos a clientes", que resta ventas) pagada desde el saldo de Stripe.
   const key = `stripe-refund:${charge.id}`;
   const prior = await tx.select({ c: s.expenses.amountCents }).from(s.expenses).where(eq(s.expenses.notes, key));
   const delta = charge.amount_refunded - prior.reduce((a, x) => a + x.c, 0);
   if (delta <= 0) return { kind: "skip" as const };
   await saveExpense(tx, {
     expenseDate: today,
-    description: `Reembolso parcial · ${rev.customerName ?? "cliente"}`,
+    description: `Reembolso · ${rev.customerName ?? "cliente"}`,
     categoryId: await categoryByName(tx, "opex", "Descuentos y reembolsos a clientes"),
     vendorId: null,
     frequency: "one_time",

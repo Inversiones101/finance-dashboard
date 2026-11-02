@@ -32,8 +32,8 @@ describe("puesta en marcha", () => {
 
     const data = await loadFinanceData(db);
     const after = computePnlReport(data, { from: "2026-09", to: "2026-09", granularity: "month" }).total;
-    expect(after.opex).toBe(before.opex); // no es gasto operativo
-    expect(after.ebit).toBe(before.ebit);
+    expect(after.opex).toBe(before.opex); // va en su propia línea, no en gastos de operación
+    expect(after.ebit).toBe(before.ebit - 500); // US GAAP: sí es gasto del periodo
     expect(after.preOperating).toBe(before.preOperating + 500);
 
     const paidAfter = (await db.select().from(s.expenses).where(eq(s.expenses.contractId, contract.id))).reduce((a, e) => a + e.amountCents, 0);

@@ -23,7 +23,7 @@ export type FundingSource = "llc_cash" | "llc_credit" | "owner_personal";
 export type AccountType = "checking" | "savings" | "credit_card" | "processor" | "cash";
 
 export type FinanceData = {
-  categories: { id: string; name: string; kind: CategoryKind; pnlLine?: PnlLine }[];
+  categories: { id: string; name: string; kind: CategoryKind; pnlLine?: PnlLine; isContraRevenue?: boolean }[];
   products: { id: string; name: string; listPriceCents?: number | null }[];
   accounts: {
     id: string;
@@ -196,6 +196,7 @@ const PNL_MOVEMENT_TYPES = new Set(["fee", "interest", "adjustment", "tax_paymen
 
 type Lines = {
   gross: number;
+  returns: number; // devoluciones y descuentos sobre ventas
   processorFees: number;
   affiliateFees: number;
   revenue: number;
@@ -207,7 +208,7 @@ type Lines = {
   ebit: number;
   interest: number;
   other: number; // otros ingresos (+) / gastos (−)
-  preOperating: number; // gastos de puesta en marcha pagados con capital del dueño
+  preOperating: number; // gastos de puesta en marcha (ASC 720-15: gasto del periodo en que ocurren)
   ebt: number;
   taxes: number;
   netProfit: number;
@@ -218,6 +219,7 @@ type Lines = {
     opexByCategory: Map<string, number>;
     interestByCategory: Map<string, number>;
     preOperatingByCategory: Map<string, number>;
+    returnsByCategory: Map<string, number>;
     otherByType: Map<string, number>;
   };
 };
@@ -282,8 +284,10 @@ function makePnl(data: FinanceData) {
       opexByCategory: new Map(),
       interestByCategory: new Map(),
       preOperatingByCategory: new Map(),
+      returnsByCategory: new Map(),
       otherByType: new Map(),
     };
+    let returns = 0;
     let gross = 0, processorFees = 0, affiliateFees = 0, cogs = 0, opex = 0, depreciation = 0, interest = 0, taxes = 0, other = 0, preOperating = 0, expenseCount = 0;
 
     for (const r of revenues) {
@@ -311,7 +315,10 @@ function makePnl(data: FinanceData) {
       }
       expenseCount++;
       const line = c?.pnlLine ?? "operating";
-      if (line === "depreciation") depreciation += v;
+      if (c?.isContraRevenue) {
+        returns += v;
+        add(d.returnsByCategory, name, v);
+      } else if (line === "depreciation") depreciation += v;
       else if (line === "income_tax") taxes += v;
       else if (line === "interest") {
         interest += v;
@@ -343,15 +350,18 @@ function makePnl(data: FinanceData) {
       }
     }
 
-    const revenue = gross - processorFees - affiliateFees;
-    const grossProfit = revenue - cogs;
-    const ebitda = grossProfit - opex;
+    // US GAAP: ventas netas = brutas − devoluciones y descuentos. Las comisiones por cobrar
+    // (Skool, Stripe, afiliados) son costo de ventas. La puesta en marcha es gasto del periodo
+    // (ASC 720-15), dentro de la operación.
+    const revenue = gross - returns;
+    const grossProfit = revenue - processorFees - affiliateFees - cogs;
+    const ebitda = grossProfit - opex - preOperating;
     const ebit = ebitda - depreciation;
     // La puesta en marcha es capital del dueño invertido antes de operar: no resta de la utilidad.
     // Se muestra aparte (memo) y en el balance reduce el capital directamente.
     const ebt = ebit - interest + other;
     const netProfit = ebt - taxes;
-    return { gross, processorFees, affiliateFees, revenue, cogs, grossProfit, opex, ebitda, depreciation, ebit, interest, other, preOperating, ebt, taxes, netProfit, expenseCount, detail: d };
+    return { gross, returns, processorFees, affiliateFees, revenue, cogs, grossProfit, opex, ebitda, depreciation, ebit, interest, other, preOperating, ebt, taxes, netProfit, expenseCount, detail: d };
   };
 }
 
@@ -1108,21 +1118,22 @@ function periodBounds(key: string, g: Granularity) {
 }
 
 export const PNL_ROWS = [
-  { key: "gross", label: TERMS.grossSales, detail: "revenueByProduct", help: "Todo lo cobrado, antes de comisiones." },
-  { key: "processorFees", label: `− ${TERMS.platformFees}`, out: true, help: "Lo que cobra Skool por cada pago." },
-  { key: "affiliateFees", label: `− ${TERMS.affiliateFees}`, out: true, help: "Solo si registraste una comisión de afiliado en el cobro." },
-  { key: "revenue", label: `= ${TERMS.netSales}`, strong: true, help: "Ventas brutas menos comisiones." },
-  { key: "cogs", label: `− ${TERMS.costOfSales}`, out: true, detail: "cogsByCategory", help: "Lo que cuesta entregar el producto." },
-  { key: "grossProfit", label: `= ${TERMS.grossProfit}`, strong: true, help: "Ventas netas − costo de ventas." },
+  { key: "gross", label: TERMS.grossSales, detail: "revenueByProduct", help: "Ventas reconocidas en el periodo, antes de devoluciones." },
+  { key: "returns", label: "− Devoluciones y descuentos sobre ventas", out: true, detail: "returnsByCategory", help: "Reembolsos y descuentos a clientes: reducen las ventas." },
+  { key: "revenue", label: `= ${TERMS.netSales}`, strong: true, help: "Ventas brutas − devoluciones y descuentos." },
+  { key: "processorFees", label: `− ${TERMS.platformFees}`, out: true, help: "Costo de cobrar: comisiones de Skool y Stripe." },
+  { key: "affiliateFees", label: `− ${TERMS.affiliateFees}`, out: true, help: "Solo si registraste una comisión de afiliado." },
+  { key: "cogs", label: `− Otros costos de ventas`, out: true, detail: "cogsByCategory", help: "Lo que cuesta entregar el producto (ej. el plan de Skool)." },
+  { key: "grossProfit", label: `= ${TERMS.grossProfit}`, strong: true, help: "Ventas netas − costo de ventas (incluye comisiones)." },
   { key: "opex", label: `− ${TERMS.operatingExpenses}`, out: true, detail: "opexByCategory", help: "Software, diseño, consultoría, publicidad…" },
+  { key: "preOperating", label: "− Gastos de puesta en marcha", out: true, detail: "preOperatingByCategory", help: "Gastos de organización antes de operar. US GAAP (ASC 720-15): gasto del periodo en que ocurren." },
   { key: "depreciation", label: `− ${TERMS.depreciation}`, out: true, help: "Desgaste de activos que duran varios años." },
-  { key: "ebit", label: `= ${TERMS.operatingProfit}`, strong: true, help: "Lo que gana el negocio con su actividad normal." },
+  { key: "ebit", label: `= ${TERMS.operatingProfit}`, strong: true, help: "Lo que gana el negocio con su actividad." },
   { key: "interest", label: `− ${TERMS.financialCosts}`, out: true, detail: "interestByCategory", help: "Intereses y costos de deudas." },
-  { key: "other", label: `± ${TERMS.otherIncome}`, detail: "otherByType", help: "Cashback, intereses ganados, comisiones bancarias, ajustes." },
+  { key: "other", label: `± ${TERMS.otherIncome}`, detail: "otherByType", help: "Cashback, bonos, intereses ganados, comisiones bancarias." },
   { key: "ebt", label: `= ${TERMS.profitBeforeTax}`, strong: true, help: "Lo que queda antes de impuestos." },
   { key: "taxes", label: `− ${TERMS.incomeTaxes}`, out: true, help: "Impuestos sobre la utilidad de la LLC." },
   { key: "netProfit", label: `= ${TERMS.netProfit}`, strong: true, help: "El beneficio final, después de impuestos." },
-  { key: "preOperating", label: "Aparte: puesta en marcha pagada con tu capital inicial (no resta del beneficio)", memo: true, detail: "preOperatingByCategory", help: "Lo que pagaste de tu bolsillo antes de operar: es capital, no gasto del periodo." },
 ] as const;
 
 export type PnlKey = (typeof PNL_ROWS)[number]["key"];
@@ -1141,7 +1152,7 @@ export function computePnlReport(data: FinanceData, { from, to, granularity }: {
   const shape = (l: Lines) => {
     const values = Object.fromEntries(PNL_ROWS.map((r) => [r.key, toDollars(l[r.key])])) as Record<PnlKey, number>;
     const details = Object.fromEntries(
-      (["revenueByProduct", "cogsByCategory", "opexByCategory", "interestByCategory", "otherByType", "preOperatingByCategory"] as DetailKey[]).map((k) => [
+      (["revenueByProduct", "cogsByCategory", "opexByCategory", "interestByCategory", "otherByType", "preOperatingByCategory", "returnsByCategory"] as DetailKey[]).map((k) => [
         k,
         Object.fromEntries([...l.detail[k]].map(([name, v]) => [name, toDollars(v)])),
       ])
@@ -1308,14 +1319,14 @@ export function computeBalanceSheet(data: FinanceData, { asOf, hnlPerUsd }: { as
   const lines = makePnl(data);
   const history = lines((d) => d <= asOf);
   const preOperating = history.preOperating;
-  const retained = history.netProfit; // la utilidad ya no incluye la puesta en marcha
+  const retained = history.netProfit; // incluye la puesta en marcha (gasto del periodo)
   const openingBalances = sum(llc.map((a) => (a.type === "credit_card" ? 0 : usdByCurrency(a.openingBalanceCents, a.currency))));
   const capital = ownerSum("contribution");
   const draws = ownerSum("draw");
 
   const totalAssets = sum(cash.map((c) => c.amount)) + sum(platforms.map((p) => p.amount)) + receivables;
   const totalLiabilities = sum(cards.map((c) => c.amount)) + payables + sum(debts.map((d) => d.amount)) + ownerLoans + salesTaxPayable + deferredRevenue;
-  const totalEquity = capital - draws + retained - preOperating + openingBalances;
+  const totalEquity = capital - draws + retained + openingBalances;
 
   const list = (xs: { name: string; amount: number }[]) => xs.map((x) => ({ name: x.name, amount: toDollars(x.amount) }));
   return {

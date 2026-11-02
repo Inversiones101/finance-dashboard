@@ -22,19 +22,20 @@ beforeAll(async () => {
 });
 
 describe("P&L de septiembre 2026 (cuadra con el panel de Skool)", () => {
-  it("ingresos netos = bruto − comisiones", () => {
+  it("US GAAP: ventas netas = brutas − devoluciones; las comisiones son costo de ventas", () => {
     expect(d.kpis.revenueGross).toBe(4034);
     expect(d.kpis.platformFees).toBe(148);
-    expect(d.kpis.revenue).toBe(3886);
+    expect(d.kpis.revenue).toBe(4034); // sin devoluciones en septiembre
+    expect(d.kpis.grossProfit).toBe(4034 - 148);
   });
   it("utilidad bruta y neta", () => {
-    // Lo pagado por el dueño antes del 20 sep (Loom, cuota 2, Skool Pro) es puesta en marcha:
-    // capital del dueño: fuera de la utilidad bruta, el EBITDA y también de la utilidad neta.
+    // Lo pagado por el dueño antes de operar es puesta en marcha: US GAAP (ASC 720-15) la registra
+    // como gasto del periodo, dentro de la operación (pagada con capital del dueño).
     expect(d.kpis.grossProfit).toBe(3886);
-    expect(d.kpis.ebitda).toBe(3886);
     expect(d.kpis.preOperating).toBe(623);
-    expect(d.kpis.netProfit).toBe(3887.05); // EBITDA + ajuste de conciliación de Skool ($1.05)
-    expect(d.kpis.netMargin).toBeCloseTo(1, 2);
+    expect(d.kpis.operatingProfit).toBe(3886 - 623);
+    expect(d.kpis.netProfit).toBe(3264.05); // + ajuste de conciliación de Skool ($1.05)
+    expect(d.kpis.netMargin).toBeCloseTo(3264.05 / 4034, 3);
   });
   it("ingresos por producto separan membresía mensual y anual", () => {
     expect(d.month.revenueByProduct.map((p) => p.name).sort()).toEqual(["Membresía anual", "Membresía mensual"]);
@@ -81,15 +82,15 @@ describe("Estados financieros", () => {
     expect(b.equity.preOperating).toBeCloseTo(3355.86, 2); // todo lo aportado fue puesta en marcha
     expect(b.equity.draws).toBe(1.34);
   });
-  it("P&L: la puesta en marcha va en su propia línea, fuera de la operación", () => {
+  it("P&L: la puesta en marcha es gasto del periodo en que ocurre (ASC 720-15), en su propia línea", () => {
     const r = computePnlReport(data, { from: "2026-08", to: "2026-09", granularity: "month" });
     const [aug, sep] = r.periods;
     expect(aug.opex).toBe(0);
     expect(aug.interest).toBe(0);
     expect(aug.preOperating).toBeCloseTo(2732.86, 2);
-    expect(aug.netProfit).toBe(0); // no resta: se pagó con capital inicial
+    expect(aug.netProfit).toBeCloseTo(-2732.86, 2); // gasto de agosto (pagado con capital del dueño)
     expect(sep.processorFees + sep.affiliateFees).toBe(148);
-    expect(sep.ebit).toBe(3886);
+    expect(sep.ebit).toBe(3886 - 623);
     expect(sep.preOperating).toBe(623);
     expect(sep.other).toBe(1.05);
     expect(Object.keys(sep.details.revenueByProduct).sort()).toEqual(["Membresía anual", "Membresía mensual"]);
@@ -170,7 +171,7 @@ describe("Genérico: datos nuevos no requieren código", () => {
       ],
     };
     const r = computeDashboard(extra, { asOf: "2026-09-22", hnlPerUsd: 26.86 });
-    expect(r.kpis.revenue).toBe(3886 + 190);
+    expect(r.kpis.revenue).toBe(4034 + 200);
     expect(r.kpis.mrr).toBe(811); // venta única: no suma al MRR
     expect(r.month.revenueByProduct.map((p) => p.name)).toContain("Curso de Bolsa");
   });
@@ -236,5 +237,26 @@ describe("Reconocimiento de ingresos (base devengada, la de los reportes)", () =
       expect(bs.liabilities.deferredRevenue).toBeGreaterThan(0);
       expect(bs.difference).toBe(0);
     }
+  });
+});
+
+describe("US GAAP: devoluciones y descuentos sobre ventas", () => {
+  it("un reembolso o descuento resta ventas (no es gasto de operación) y el balance cuadra", () => {
+    const contra = { id: "c-dev", name: "Descuentos y reembolsos a clientes", kind: "opex" as const, isContraRevenue: true };
+    const extra: FinanceData = {
+      ...data,
+      categories: [...data.categories, contra],
+      expenses: [
+        ...data.expenses,
+        { date: "2026-09-25", description: "Descuento prometido", categoryId: "c-dev", amountCents: 2534, fxRateToUsd: 1, fundingSource: "owner_personal", paymentAccountId: null, dueDate: null, status: "paid", contractId: null },
+      ],
+      ownerLedger: [...data.ownerLedger, { date: "2026-09-25", type: "contribution", amountCents: 2534, fxRateToUsd: 1 }],
+    };
+    const t = computePnlReport({ ...extra, operationsStart: "2026-09-16" }, { from: "2026-09", to: "2026-09", granularity: "month" }).total;
+    const before = computePnlReport({ ...data, operationsStart: "2026-09-16" }, { from: "2026-09", to: "2026-09", granularity: "month" }).total;
+    expect(t.returns).toBe(25.34);
+    expect(t.revenue).toBe(before.revenue - 25.34);
+    expect(t.opex).toBe(before.opex);
+    expect(computeBalanceSheet(extra, { asOf: "2026-09-30", hnlPerUsd: 26.86 }).difference).toBe(0);
   });
 });

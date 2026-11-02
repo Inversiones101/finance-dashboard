@@ -36,7 +36,7 @@ export async function loadFinanceData(db: AnyDb): Promise<FinanceData> {
   const llcIds = new Set(accounts.filter((a) => a.owner === "llc").map((a) => a.id));
 
   return {
-    categories: categories.map((c) => ({ id: c.id, name: c.name, kind: c.kind, pnlLine: c.pnlLine })),
+    categories: categories.map((c) => ({ id: c.id, name: c.name, kind: c.kind, pnlLine: c.pnlLine, isContraRevenue: c.isContraRevenue })),
     products: products.map((p) => ({ id: p.id, name: p.name, listPriceCents: p.listPriceCents })),
     accounts: accounts.map((a) => ({
       id: a.id,

@@ -1,6 +1,6 @@
 /**
- * Vocabulario contable único de la app (base: NIF B-3 estado de resultados, B-2 estado de
- * flujos de efectivo y B-6 estado de situación financiera). Todas las pantallas, el Excel del
+ * Vocabulario contable único de la app. Normas: US GAAP (la LLC es de EE. UU.: ASC 606 ingresos,
+ * ASC 720-15 puesta en marcha); nombres en español según NIF B-3, B-2 y B-6. Todas las pantallas, el Excel del
  * contador y el informe con IA usan estos nombres: no "EBITDA", "EBIT" ni "P&L".
  */
 export const TERMS = {
@@ -43,10 +43,12 @@ export const TERMS = {
 
 /** Qué significa cada concepto, en lenguaje simple. Se muestra al pasar el cursor y en el glosario. */
 export const GLOSSARY: { term: string; meaning: string }[] = [
-  { term: TERMS.grossSales, meaning: "Todo lo que cobraste a tus clientes, antes de descuentos y comisiones." },
-  { term: TERMS.netSales, meaning: "Lo que de verdad te queda de las ventas: ventas brutas menos las comisiones de Skool y de afiliados." },
-  { term: TERMS.costOfSales, meaning: "Lo que cuesta entregar el producto (ej. el plan de Skool que hospeda la comunidad)." },
+  { term: TERMS.grossSales, meaning: "Ventas del periodo (reconocidas: una anual se reparte en 12 meses), antes de devoluciones y descuentos." },
+  { term: TERMS.netSales, meaning: "Ventas brutas menos devoluciones y descuentos a clientes (reembolsos, descuentos prometidos)." },
+  { term: TERMS.costOfSales, meaning: "Lo que cuesta vender y entregar: comisiones de Skool, Stripe y afiliados, y el plan de Skool." },
   { term: TERMS.grossProfit, meaning: "Ventas netas − costo de ventas. Cuánto deja el producto antes de los gastos del negocio." },
+  { term: "Gastos de puesta en marcha", meaning: "Gastos de organización antes de operar. Según US GAAP (ASC 720-15) son gasto del periodo en que ocurren, aunque los hayas pagado con tu capital." },
+  { term: "Ingresos diferidos", meaning: "Lo cobrado por meses de servicio que aún no das (ej. 11 meses de una anual). Es un pasivo y se va reconociendo como venta mes a mes (ASC 606)." },
   { term: TERMS.operatingExpenses, meaning: "Lo que cuesta operar el negocio: software, diseño, consultoría, publicidad, etc." },
   { term: TERMS.operatingProfit, meaning: "Beneficio bruto − gastos de operación. Lo que gana el negocio con su actividad normal." },
   { term: TERMS.financialCosts, meaning: "Intereses y costos de deudas o financiamiento." },

@@ -303,6 +303,8 @@ export const categories = pgTable(
     parentId: uuid("parent_id").references((): AnyPgColumn => categories.id),
     isTaxDeductible: boolean("is_tax_deductible").notNull().default(true),
     pnlLine: pnlLineEnum("pnl_line").notNull().default("operating"),
+    /** Devoluciones y descuentos sobre ventas: reducen las ventas (US GAAP), no son gasto. */
+    isContraRevenue: boolean("is_contra_revenue").notNull().default(false),
     color: varchar("color", { length: 16 }), // para chips y gráficos
     ...timestamps,
   },

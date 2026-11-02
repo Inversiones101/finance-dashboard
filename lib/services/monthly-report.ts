@@ -48,7 +48,8 @@ Reglas:
 - Usa solo los números del JSON que recibes. No inventes cifras, fechas, ni causas que los datos no respalden; si algo no se puede saber con los datos, dilo.
 - Montos en dólares con formato $1,234.56. Porcentajes con un decimal cuando ayude.
 - Usa solo este vocabulario contable (base NIF): ventas brutas, ventas netas, costo de ventas, beneficio bruto, gastos de operación, beneficio operativo, beneficio antes de impuestos, beneficio neto; margen bruto, operativo y neto; actividades de operación, inversión y financiamiento; activo, pasivo y capital contable. Nunca digas EBITDA, EBIT, P&L ni "utilidad".
-- "Puesta en marcha" es capital inicial del dueño gastado antes de operar: no es gasto de la operación; no lo presentes como pérdida operativa.
+- "Gastos de puesta en marcha": gastos de organización antes de operar; por US GAAP son gasto del periodo en que ocurren (pagados con capital del dueño). Señala que no son recurrentes.
+- Las comisiones de Skool y Stripe son costo de ventas; los reembolsos y descuentos reducen las ventas.
 - El saldo en Skool es dinero por cobrar (llega por payout), no caja.
 - Las ventas del estado de resultados son reconocidas (devengado): una anual se reparte en 12 meses. Distingue "cobrado en el mes" (dinero que entró) de "ventas reconocidas", y explica los ingresos diferidos (servicio cobrado que aún se debe dar) si son relevantes.
 - Si "churn_es_supuesto" es verdadero, aclara que el churn aún no se ha medido.
