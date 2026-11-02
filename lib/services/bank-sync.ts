@@ -122,6 +122,12 @@ export async function refreshSuggestions(tx: Tx) {
     .from(s.cashMovements)
     .where(and(inArray(s.cashMovements.accountId, accountIds), isNull(s.cashMovements.externalId)));
   const claimed = new Set<string>();
+  // ¿Quedan cargos viejos registrados con la tarjeta IO sin pagar?
+  const [{ n: legacyCards }] = await tx
+    .select({ n: sql<number>`count(*)::int` })
+    .from(s.expenses)
+    .where(and(eq(s.expenses.fundingSource, "llc_credit"), eq(s.expenses.status, "pending")));
+  const legacyCardDebt = legacyCards > 0;
 
   for (const item of pending) {
     const text = normName(`${item.counterparty ?? ""} ${item.description ?? ""}`);
@@ -142,9 +148,14 @@ export async function refreshSuggestions(tx: Tx) {
       if (pair) sug = { as: "transfer", pairId: pair.id, label: "Transferencia entre tus cuentas" };
     }
 
-    // b2) Pago de la tarjeta de la LLC (Mercury IO se cobra sola desde Checking): nunca es gasto.
-    //     Va antes que las reglas para corregir clasificaciones aprendidas por error.
-    if (!sug && item.amountCents < 0 && CARD_PAYMENT.test(text)) sug = { as: "card_payment", label: "Pago de la tarjeta Mercury IO (no es gasto)" };
+    // b2) Débito diario de la IO ("Mercury Credit"): ES el gasto (la IO ya no se usa como forma de
+    //     pago). Solo si quedan cargos viejos de la IO por pagar, se liquida contra ellos.
+    //     Va antes que las reglas aprendidas para corregir clasificaciones viejas.
+    if (!sug && item.amountCents < 0 && CARD_PAYMENT.test(text)) {
+      sug = legacyCardDebt
+        ? { as: "card_payment", label: "Pago de la tarjeta Mercury IO (liquida cargos ya registrados)" }
+        : { as: "expense", label: "Cargo de la tarjeta IO: es el gasto. Elige categoría y escribe qué fue (ej. Loom)" };
+    }
 
     // c) Regla aprendida por contraparte.
     if (!sug) {

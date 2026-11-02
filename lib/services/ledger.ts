@@ -429,7 +429,20 @@ export async function payCard(tx: Tx, { cardId, fromAccountId, date, userId }: {
 export async function chargeSubscription(tx: Tx, subscriptionId: string, { date, accountId, userId }: { date: string; accountId?: string | null; userId?: string | null }) {
   const [sub] = await tx.select().from(s.subscriptions).where(eq(s.subscriptions.id, subscriptionId));
   if (!sub) throw new Error("La suscripción no existe");
-  const paymentAccountId = accountId === undefined ? sub.defaultPaymentAccountId : accountId;
+  let paymentAccountId = accountId === undefined ? sub.defaultPaymentAccountId : accountId;
+  // Suscripciones que tenían la IO como forma de pago: el gasto sale de Checking (la IO se paga sola desde ahí).
+  if (paymentAccountId) {
+    const [acc] = await tx.select().from(s.financialAccounts).where(eq(s.financialAccounts.id, paymentAccountId));
+    if (acc?.type === "credit_card") {
+      const [bank] = await tx
+        .select({ id: s.financialAccounts.id })
+        .from(s.financialAccounts)
+        .where(and(eq(s.financialAccounts.owner, "llc"), eq(s.financialAccounts.type, "checking")))
+        .orderBy(asc(s.financialAccounts.sortOrder))
+        .limit(1);
+      if (bank) paymentAccountId = bank.id;
+    }
+  }
   const funding = await fundingForAccount(tx, paymentAccountId);
 
   const expenseId = await saveExpense(tx, {

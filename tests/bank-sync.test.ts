@@ -8,7 +8,7 @@ import * as s from "@/db/schema";
 import { seed } from "@/db/seed";
 import type { BankClient, MercuryTransaction } from "@/lib/mercury/client";
 import { acceptAllSuggestions, resolveInboxItem, syncBank, type Suggestion } from "@/lib/services/bank-sync";
-import { accountBalanceCents, deleteExpense, saveExpense, saveRevenue, type Tx } from "@/lib/services/ledger";
+import { accountBalanceCents, chargeSubscription, deleteExpense, saveExpense, saveRevenue, type Tx } from "@/lib/services/ledger";
 import { loadFinanceData } from "@/lib/data/finance-data";
 import { computeBalanceSheet } from "@/lib/finance/engine";
 
@@ -179,5 +179,29 @@ describe("pago diario de la tarjeta Mercury IO desde Checking", () => {
     const [again] = await inbox();
     expect(again.status).toBe("pending");
     expect((again.suggestion as Suggestion).as).toBe("card_payment");
+  });
+});
+
+describe("sin la IO como forma de pago", () => {
+  it("el débito 'Mercury Credit' se sugiere como el gasto cuando no hay cargos viejos de la IO", async () => {
+    await syncBank(db, fake({ "m-chk": [t("io9", -12, "2026-11-02", "Mercury Credit")] }), "2026-11-02");
+    const [item] = await inbox();
+    expect((item.suggestion as Suggestion).as).toBe("expense");
+  });
+
+  it("una suscripción que tenía la IO se cobra desde Checking y el débito del banco se reconoce como ya registrado", async () => {
+    const [io] = await db.select().from(s.financialAccounts).where(eq(s.financialAccounts.name, "Mercury IO"));
+    const [software] = await db.select().from(s.categories).where(eq(s.categories.kind, "opex")).limit(1);
+    const [sub] = await db
+      .insert(s.subscriptions)
+      .values({ name: "Loom", vendorId: (await db.insert(s.counterparties).values({ type: "vendor", name: "Loom" }).returning())[0].id, categoryId: software.id, amountCents: 2400, currency: "USD", billingInterval: "monthly", startedOn: "2026-09-11", nextRenewalOn: "2026-11-11", defaultPaymentAccountId: io.id, status: "active" })
+      .returning();
+    await chargeSubscription(db, sub.id, { date: "2026-11-11" });
+    const [exp] = await db.select().from(s.expenses).where(eq(s.expenses.subscriptionId, sub.id));
+    expect(exp).toMatchObject({ paymentAccountId: acc["Mercury Checking"].id, fundingSource: "llc_cash", status: "paid" });
+
+    await syncBank(db, fake({ "m-chk": [t("io10", -24, "2026-11-12", "Mercury Credit")] }), "2026-11-12");
+    const [item] = await inbox();
+    expect((item.suggestion as Suggestion).as).toBe("match"); // no se duplica el gasto
   });
 });

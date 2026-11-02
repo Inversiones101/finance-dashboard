@@ -195,7 +195,7 @@ export async function BankInbox({ o, canWrite }: { o: FormOptions; canWrite: boo
                   const ready = !!sug && !(sug.as === "expense" && !sug.categoryId);
                   const inflow = i.amountCents > 0;
                   const Kind = sug ? SUGGESTION[sug.as].icon : inflow ? ArrowDownLeft : ArrowUpRight;
-                  const extra = [...(sug?.as === "match" ? ["match"] : []), ...(sug?.as === "transfer" ? ["transfer"] : []), ...(inflow ? ["payout"] : ["card_payment"]), "ignore"].map((v) => ({
+                  const extra = [...(sug?.as === "match" ? ["match"] : []), ...(sug?.as === "transfer" ? ["transfer"] : []), ...(inflow ? ["payout"] : sug?.as === "card_payment" ? ["card_payment"] : []), "ignore"].map((v) => ({
                     value: v,
                     label: EXTRA_LABEL[v],
                   }));

@@ -28,7 +28,7 @@ export async function getFormOptions() {
    */
   const paymentAccounts: Option[] = [
     ...llc.filter((a) => a.type !== "processor" && a.type !== "credit_card").map((a) => ({ value: a.id, label: accountLabel(a), group: "Cuentas de la LLC" })),
-    ...llc.filter((a) => a.type === "credit_card").map((a) => ({ value: a.id, label: accountLabel(a), group: "Tarjetas de la LLC" })),
+    // Sin tarjetas de crédito: la IO se paga sola desde Checking, así que el gasto se registra con Checking.
     { value: "personal", label: "Aporte del dueño (dinero personal)", group: "Aporte del dueño" },
   ];
 
