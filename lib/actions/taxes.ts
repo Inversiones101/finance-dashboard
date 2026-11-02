@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import * as s from "@/db/schema";
-import { findOrCreateCounterparty, payTax } from "@/lib/services/ledger";
+import { assertNotAlreadyFromBank, findOrCreateCounterparty, payTax } from "@/lib/services/ledger";
 import { mutate } from "./mutate";
 import { fail, parseForm, zCurrency, zDate, zId, zMoney, zOptDate, zOptId, zOptMoney, zOptText, zText, type ActionResult } from "./result";
 
@@ -44,6 +44,7 @@ export async function payTaxAction(_: ActionResult | null, form: FormData): Prom
   if (!p.data) return fail(p.error);
   const { taxId, ...pay } = p.data;
   return mutate("taxes", "write", "tax_obligations", "payment", async (tx, userId) => {
+    await assertNotAlreadyFromBank(tx, pay.accountId, -pay.amountCents, pay.date);
     await payTax(tx, taxId, { ...pay, userId });
     return { id: taxId, message: "Pago registrado" };
   });

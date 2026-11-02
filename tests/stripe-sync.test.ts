@@ -12,7 +12,7 @@ import { computeBalanceSheet, computeMembers, computePnlReport } from "@/lib/fin
 import { accountBalanceCents, type Tx } from "@/lib/services/ledger";
 import { escalateOverdue, handleStripeEvent, importStripeHistory, limitInstallmentSubscription, stripeAccountId } from "@/lib/services/stripe-sync";
 import { completeAccessTask } from "@/lib/services/access-tasks";
-import { refreshSuggestions } from "@/lib/services/bank-sync";
+import { acceptAllSuggestions, refreshSuggestions } from "@/lib/services/bank-sync";
 import type { StripeGateway } from "@/lib/stripe/client";
 
 const DAY = 86_400;
@@ -146,21 +146,25 @@ describe("Stripe: plan anual de $199 en 3 cuotas", () => {
     expect((await db.select().from(s.members))[0].status).toBe("canceled");
   });
 
-  it("payout de Stripe a Mercury es transferencia: no suma ingresos y la bandeja lo reconoce", async () => {
+  it("payout de Stripe: el webhook no lo manda a ninguna cuenta; llega por la bandeja a la cuenta real (Savings) como transferencia", async () => {
     await handleStripeEvent(db, event("invoice.paid", invoice("in_1", "2026-10-10")), gw(), "2026-10-10");
+    const r = await handleStripeEvent(db, event("payout.paid", { id: "po_1", amount: 6411, currency: "usd", arrival_date: unix("2026-10-12"), status: "paid" }), gw(), "2026-10-12");
+    expect(r.kind).toBe("ignored");
     const before = computePnlReport(await loadFinanceData(db), { from: "2026-10", to: "2026-10", granularity: "month" }).total.gross;
-    await handleStripeEvent(db, event("payout.paid", { id: "po_1", amount: 6411, currency: "usd", arrival_date: unix("2026-10-12"), status: "paid" }), gw(), "2026-10-12");
-    const data = await loadFinanceData(db);
-    expect(computePnlReport(data, { from: "2026-10", to: "2026-10", granularity: "month" }).total.gross).toBe(before);
-    expect(await accountBalanceCents(db, await stripeAccountId(db), "2026-10-12")).toBe(0);
-    expect(computeBalanceSheet(data, { asOf: "2026-10-31", hnlPerUsd: 26.9 }).difference).toBe(0);
 
-    // El mismo depósito llega por Mercury: la bandeja lo marca "ya registrado", no ingreso nuevo.
-    const [chk] = await db.select().from(s.financialAccounts).where(eq(s.financialAccounts.name, "Mercury Checking"));
-    await db.insert(s.bankInbox).values({ accountId: chk.id, externalId: "merc_1", postedOn: "2026-10-13", amountCents: 6411, counterparty: "STRIPE" });
+    const [sav] = await db.select().from(s.financialAccounts).where(eq(s.financialAccounts.name, "Mercury Savings"));
+    await db.update(s.financialAccounts).set({ status: "active" }).where(eq(s.financialAccounts.id, sav.id));
+    await db.insert(s.bankInbox).values({ accountId: sav.id, externalId: "merc_1", postedOn: "2026-10-13", amountCents: 6411, counterparty: "Stripe", description: "STRIPE; TRANSFER" });
     await refreshSuggestions(db);
     const [item] = await db.select().from(s.bankInbox);
-    expect((item.suggestion as { as: string }).as).toBe("match");
+    expect((item.suggestion as { as: string }).as).toBe("payout");
+    await acceptAllSuggestions(db, null);
+
+    const data = await loadFinanceData(db);
+    expect(computePnlReport(data, { from: "2026-10", to: "2026-10", granularity: "month" }).total.gross).toBe(before); // no es venta nueva
+    expect(await accountBalanceCents(db, await stripeAccountId(db), "2026-10-13")).toBe(0);
+    expect(await accountBalanceCents(db, sav.id, "2026-10-13")).toBe(6411);
+    expect(computeBalanceSheet(data, { asOf: "2026-10-31", hnlPerUsd: 26.9 }).difference).toBe(0);
   });
 
   it("impuesto cobrado por Stripe: fuera del ingreso, como pasivo por remitir; el balance cuadra", async () => {
@@ -188,15 +192,10 @@ describe("Stripe: plan anual de $199 en 3 cuotas", () => {
       paidInvoices: async function* () {
         yield invoice("in_1", "2026-10-10");
       },
-      payouts: async function* () {
-        yield { id: "po_1", amount: 6411, currency: "usd", arrival_date: unix("2026-10-12"), status: "paid" } as unknown as Stripe.Payout;
-      },
     });
     await importStripeHistory(db, history, 0, "2026-10-16");
     await importStripeHistory(db, history, 0, "2026-10-16");
     expect(await db.select().from(s.revenues).where(eq(s.revenues.externalId, "in_1"))).toHaveLength(1);
-    const stripeId = await stripeAccountId(db);
-    expect(await db.select().from(s.cashMovements).where(and(eq(s.cashMovements.accountId, stripeId), eq(s.cashMovements.externalId, "po_1")))).toHaveLength(1);
   });
 
   it("limitar a 3 cuotas solo si está activado, y programa el fin justo antes de la cuarta", async () => {

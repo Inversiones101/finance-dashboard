@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import * as s from "@/db/schema";
-import { classifyMovement, payCard, payout, reconcile, transfer } from "@/lib/services/ledger";
+import { assertNotAlreadyFromBank, classifyMovement, payCard, payout, reconcile, transfer } from "@/lib/services/ledger";
 import { mutate } from "./mutate";
 import { fail, parseForm, zCurrency, zDate, zId, zInt, zMoney, zOptDate, zOptId, zOptMoney, zOptText, zText, type ActionResult } from "./result";
 
@@ -109,6 +109,8 @@ export async function transferAction(_: ActionResult | null, form: FormData): Pr
   if (p.data.fromId === p.data.toId) return fail("Elige dos cuentas distintas.");
   const t = p.data;
   return mutate("banking", "write", "cash_movements", "transfer", async (tx, userId) => {
+    await assertNotAlreadyFromBank(tx, t.fromId, -t.amountCents, t.date);
+    await assertNotAlreadyFromBank(tx, t.toId, t.amountCents, t.date);
     await transfer(tx, { ...t, userId });
     return { message: "Transferencia registrada" };
   });
@@ -135,10 +137,14 @@ export async function reconcileAction(_: ActionResult | null, form: FormData): P
   if (!p.data) return fail(p.error);
   const r = p.data;
   return mutate("banking", "admin", "account_statements", "reconcile", async (tx, userId) => {
-    const { diff } = await reconcile(tx, { ...r, userId });
-    return {
-      message: diff === 0 ? "¡Cuadra perfecto! Cuenta conciliada." : `Conciliada con un ajuste de ${(diff / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}`,
-    };
+    const { diff, adjusted } = await reconcile(tx, { ...r, userId });
+    const usd = (c: number) => (c / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+    if (diff !== 0 && !adjusted) {
+      throw new Error(
+        `No cuadra por ${usd(diff)} (${diff > 0 ? "el banco tiene más" : "el banco tiene menos"}). No se creó ningún ajuste: casi siempre es un movimiento duplicado o sin registrar. Revisa los movimientos de la cuenta (la app marca los posibles duplicados).`
+      );
+    }
+    return { message: diff === 0 ? "¡Cuadra perfecto! Cuenta conciliada." : `Conciliada con un ajuste menor de ${usd(diff)} (redondeo)` };
   });
 }
 
@@ -157,6 +163,7 @@ export async function payoutAction(_: ActionResult | null, form: FormData): Prom
   if (p.data.amountCents === 0) return fail("El monto no puede ser cero.");
   const d = p.data;
   return mutate("banking", "write", "cash_movements", "payout", async (tx, userId) => {
+    await assertNotAlreadyFromBank(tx, d.toAccountId, d.amountCents, d.date);
     await payout(tx, { ...d, userId });
     return { message: d.toAccountId ? "Payout registrado: el dinero ya está en la caja" : "Payout al dueño registrado como retiro" };
   });

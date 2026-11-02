@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import * as s from "@/db/schema";
-import { chargeSubscription, findOrCreateCounterparty, fundingForAccount } from "@/lib/services/ledger";
+import { assertNotAlreadyFromBank, chargeSubscription, findOrCreateCounterparty, fundingForAccount } from "@/lib/services/ledger";
 import { mutate } from "./mutate";
 import { fail, parseForm, zCurrency, zDate, zId, zMoney, zOptDate, zOptId, zOptText, zText, type ActionResult } from "./result";
 
@@ -50,6 +50,8 @@ export async function chargeSubscriptionAction(_: ActionResult | null, form: For
   if (!p.data) return fail(p.error);
   const { id, date, accountId } = p.data;
   return mutate("subscriptions", "write", "subscriptions", "charge", async (tx, userId) => {
+    const [sub] = await tx.select().from(s.subscriptions).where(eq(s.subscriptions.id, id));
+    if (sub && sub.currency === "USD") await assertNotAlreadyFromBank(tx, accountId ?? sub.defaultPaymentAccountId, -sub.amountCents, date);
     const expenseId = await chargeSubscription(tx, id, { date, accountId, userId });
     return { id: expenseId, message: "Cobro registrado como gasto" };
   });

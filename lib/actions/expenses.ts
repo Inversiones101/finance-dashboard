@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { deleteExpense, saveExpense } from "@/lib/services/ledger";
+import { assertNotAlreadyFromBank, deleteExpense, saveExpense } from "@/lib/services/ledger";
 import { mutate } from "./mutate";
 import { fail, parseForm, zCurrency, zDate, zId, zInterval, zMoney, zOptDate, zOptId, zOptText, zText, type ActionResult } from "./result";
 
@@ -29,6 +29,7 @@ export async function saveExpenseAction(_: ActionResult | null, form: FormData):
   if (!p.data) return fail(p.error);
   const { id, ...input } = p.data;
   return mutate("expenses", "write", "expenses", id ? "update" : "create", async (tx, userId) => {
+    if (!id && input.currency === "USD") await assertNotAlreadyFromBank(tx, input.paymentAccountId, -input.amountCents, input.paidOn ?? input.expenseDate);
     const savedId = await saveExpense(tx, { ...input, createdBy: userId }, id ?? undefined);
     return { id: savedId, message: id ? "Gasto actualizado" : "Gasto registrado", diff: input };
   });

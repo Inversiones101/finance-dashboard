@@ -102,7 +102,7 @@ export default async function DashboardPage() {
       node: (
       <section className="grid gap-4 lg:grid-cols-5">
         <div className="lg:col-span-3">
-          <CashHero total={d.cash.total} accounts={d.cash.accounts} cards={d.cash.llcCards} />
+          <CashHero total={d.cash.total} accounts={d.cash.accounts} cards={d.cash.llcCards.filter((c) => c.balance > 0)} />
         </div>
         <div className="lg:col-span-2">
           <PlatformCard total={d.platforms.total} accounts={d.platforms.accounts} />

@@ -8,7 +8,7 @@ import * as s from "@/db/schema";
 import { seed } from "@/db/seed";
 import type { BankClient, MercuryTransaction } from "@/lib/mercury/client";
 import { acceptAllSuggestions, resolveInboxItem, syncBank, type Suggestion } from "@/lib/services/bank-sync";
-import { accountBalanceCents, chargeSubscription, deleteExpense, saveExpense, saveRevenue, type Tx } from "@/lib/services/ledger";
+import { accountBalanceCents, assertNotAlreadyFromBank, chargeSubscription, deleteExpense, saveExpense, saveRevenue, type Tx } from "@/lib/services/ledger";
 import { loadFinanceData } from "@/lib/data/finance-data";
 import { computeBalanceSheet } from "@/lib/finance/engine";
 
@@ -203,5 +203,29 @@ describe("sin la IO como forma de pago", () => {
     await syncBank(db, fake({ "m-chk": [t("io10", -24, "2026-11-12", "Mercury Credit")] }), "2026-11-12");
     const [item] = await inbox();
     expect((item.suggestion as Suggestion).as).toBe("match"); // no se duplica el gasto
+  });
+});
+
+describe("protección contra duplicados", () => {
+  it("no deja clasificar como gasto nuevo algo que ya registraste a mano (caso cuota de Skool Scaling)", async () => {
+    const [software] = await db.select().from(s.categories).where(eq(s.categories.kind, "opex")).limit(1);
+    await saveExpense(db, {
+      expenseDate: "2026-10-28", description: "Cuota 3 · Consultoría", categoryId: software.id, vendorId: null, frequency: "one_time", currency: "USD",
+      amountCents: 237305, paymentAccountId: acc["Mercury Checking"].id, status: "paid", dueDate: null, paidOn: "2026-10-28", notes: null,
+    });
+    await syncBank(db, fake({ "m-chk": [t("w1", -2373.05, "2026-10-30", "Whop")] }), "2026-10-30");
+    const [item] = await inbox();
+    expect((item.suggestion as Suggestion).as).toBe("match");
+    await expect(resolveInboxItem(db, item.id, { as: "expense", categoryId: software.id }, null)).rejects.toThrow(/ya está registrado/);
+    await resolveInboxItem(db, item.id, { as: "match" }, null);
+    expect(await db.select().from(s.expenses).where(eq(s.expenses.amountCents, 237305))).toHaveLength(1);
+  });
+
+  it("no deja registrar a mano algo que ya entró desde el banco (caso payout de Stripe en Savings)", async () => {
+    const [sav] = await db.select().from(s.financialAccounts).where(eq(s.financialAccounts.name, "Mercury Savings"));
+    await db.update(s.financialAccounts).set({ status: "active" }).where(eq(s.financialAccounts.id, sav.id));
+    await db.insert(s.cashMovements).values({ accountId: sav.id, movementDate: "2026-10-28", type: "revenue_payout", amountCents: 12066, externalId: "merc_x", description: "Payout de Stripe" });
+    await expect(assertNotAlreadyFromBank(db, sav.id, 12066, "2026-10-27")).rejects.toThrow(/ya entró desde el banco/);
+    await expect(assertNotAlreadyFromBank(db, sav.id, 12066, "2026-11-20")).resolves.toBeUndefined(); // otra fecha: no es el mismo
   });
 });

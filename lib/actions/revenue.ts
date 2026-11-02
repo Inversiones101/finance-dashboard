@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import * as s from "@/db/schema";
-import { deleteRevenue, ownerPersonalAccountId, saveRevenue } from "@/lib/services/ledger";
+import { deleteRevenue, ownerPersonalAccountId, saveRevenue, assertNotAlreadyFromBank } from "@/lib/services/ledger";
 import { ensureMemberForRevenue } from "@/lib/services/members";
 import { mutate } from "./mutate";
 import { fail, parseForm, zCurrency, zDate, zId, zInterval, zMoney, zOptDate, zOptId, zOptMoney, zOptText, type ActionResult } from "./result";
@@ -42,6 +42,10 @@ export async function saveRevenueAction(_: ActionResult | null, form: FormData):
     // "Retiro del dueño": el cobro cayó en una cuenta personal (no se muestra cuál).
     const depositAccountId = input.depositAccountId === "owner" ? await ownerPersonalAccountId(tx) : input.depositAccountId;
     const memberId = await ensureMemberForRevenue(tx, { ...input });
+    if (!id && input.currency === "USD") {
+      await assertNotAlreadyFromBank(tx, depositAccountId, input.grossCents, input.revenueDate);
+      await assertNotAlreadyFromBank(tx, depositAccountId, input.grossCents - input.processorFeeCents - input.affiliateFeeCents, input.revenueDate);
+    }
     const savedId = await saveRevenue(tx, { ...input, depositAccountId, memberId, categoryId, createdBy: userId }, id ?? undefined);
     return { id: savedId, message: id ? "Ingreso actualizado" : "Ingreso registrado", diff: input };
   });

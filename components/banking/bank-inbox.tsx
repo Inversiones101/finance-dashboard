@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
 const EXTRA_LABEL: Record<string, string> = {
   match: "Ya está registrado (solo enlazar)",
   transfer: "Transferencia entre mis cuentas",
-  payout: "Payout de Skool",
+  payout: "Payout de Skool o Stripe",
   card_payment: "Pago de la tarjeta Mercury IO (no es gasto)",
   ignore: "Ignorar (no registrar)",
 };
@@ -41,7 +41,7 @@ const EXTRA_LABEL: Record<string, string> = {
 const SUGGESTION: Record<InboxAs, { label: string; icon: LucideIcon }> = {
   match: { label: "Ya registrado", icon: Link2 },
   transfer: { label: "Transferencia", icon: ArrowLeftRight },
-  payout: { label: "Payout de Skool", icon: Store },
+  payout: { label: "Payout de plataforma", icon: Store },
   card_payment: { label: "Pago de tarjeta IO", icon: CreditCard },
   owner_contribution: { label: "Aporte del dueño", icon: ArrowDownLeft },
   owner_draw: { label: "Retiro del dueño", icon: ArrowUpRight },

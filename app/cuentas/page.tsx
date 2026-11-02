@@ -91,7 +91,8 @@ export default async function CuentasPage({ searchParams }: PageProps<"/cuentas"
     pendingCard.filter((e) => e.paymentAccountId === a.id && e.status === "pending").reduce((x, e) => x + Math.round(e.amountCents * Number(e.fxRateToUsd)), 0);
 
   const llc = o.accounts.filter((a) => a.owner === "llc");
-  const banks = llc.filter((a) => a.type !== "processor");
+  // La IO ya no es forma de pago: solo se muestra si le quedan cargos viejos por pagar.
+  const banks = llc.filter((a) => a.type !== "processor" && (a.type !== "credit_card" || cardOwed(a) > 0));
   const platforms = llc.filter((a) => a.type === "processor");
   const selectedId =
     typeof cuenta === "string"

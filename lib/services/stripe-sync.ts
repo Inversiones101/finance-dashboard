@@ -8,7 +8,7 @@
  *  - invoice.payment_failed → cuota fallida, contrato "fallido" y tarea de contactar al cliente.
  *  - customer.subscription.deleted → contrato completado o cancelado (+ revisar acceso).
  *  - charge.refunded        → ingreso reembolsado (total) o reembolso parcial como gasto.
- *  - payout.paid            → transferencia Saldo Stripe → Mercury (NO es ingreso nuevo).
+ *  - payouts                → se reconocen en la bandeja de Mercury, en la cuenta real a la que llegan.
  *
  * Los estados solo cambian con eventos de Stripe. El acceso en Skool solo cambia al confirmar
  * la tarea manual (Skool no tiene API para módulos).
@@ -39,18 +39,6 @@ export async function stripeAccountId(tx: Tx) {
     .where(and(eq(s.financialAccounts.type, "processor"), eq(s.financialAccounts.owner, "llc"), sql`lower(coalesce(${s.financialAccounts.institution}, '')) = 'stripe'`));
   if (!a) throw new Error('No existe la cuenta "Saldo Stripe".');
   return a.id;
-}
-
-/** Cuenta bancaria donde Stripe deposita (Mercury Checking). */
-async function payoutBankId(tx: Tx) {
-  const banks = await tx
-    .select()
-    .from(s.financialAccounts)
-    .where(and(eq(s.financialAccounts.owner, "llc"), eq(s.financialAccounts.type, "checking")))
-    .orderBy(asc(s.financialAccounts.sortOrder));
-  const bank = banks.find((b) => b.institution?.toLowerCase() === "mercury") ?? banks[0];
-  if (!bank) throw new Error("No hay una cuenta bancaria de la LLC para recibir payouts.");
-  return bank.id;
 }
 
 async function productFor(tx: Tx, stripeProductId: string | null, description: string): Promise<Product> {
@@ -365,30 +353,6 @@ export async function recordRefund(tx: Tx, charge: Stripe.Charge, today: string)
   return { kind: "partial" as const, amountCents: delta };
 }
 
-/** Payout Stripe → banco: transferencia entre tus cuentas, nunca ingreso nuevo. */
-export async function recordPayout(tx: Tx, po: Stripe.Payout) {
-  if (po.currency !== "usd") throw new Error(`Moneda de payout no soportada: ${po.currency}`);
-  const stripeId = await stripeAccountId(tx);
-  const [dup] = await tx.select({ id: s.cashMovements.id }).from(s.cashMovements).where(and(eq(s.cashMovements.accountId, stripeId), eq(s.cashMovements.externalId, po.id)));
-  if (dup) return { kind: "skip" as const };
-  const bankId = await payoutBankId(tx);
-  const date = dateOf(po.arrival_date);
-  const group = crypto.randomUUID();
-  await tx.insert(s.cashMovements).values([
-    { accountId: stripeId, movementDate: date, type: "revenue_payout", amountCents: -po.amount, currency: "USD", transferGroupId: group, externalId: po.id, description: "Payout a Mercury" },
-    // Sin id externo: cuando llegue el depósito en la bandeja de Mercury se reconoce como "ya registrado".
-    { accountId: bankId, movementDate: date, type: "revenue_payout", amountCents: po.amount, currency: "USD", transferGroupId: group, description: "Payout de Stripe" },
-  ]);
-  return { kind: "payout" as const, date };
-}
-
-export async function reversePayout(tx: Tx, po: Stripe.Payout) {
-  const stripeId = await stripeAccountId(tx);
-  const [m] = await tx.select().from(s.cashMovements).where(and(eq(s.cashMovements.accountId, stripeId), eq(s.cashMovements.externalId, po.id)));
-  if (m?.transferGroupId) await tx.delete(s.cashMovements).where(eq(s.cashMovements.transferGroupId, m.transferGroupId));
-  return { kind: m ? ("reversed" as const) : ("skip" as const) };
-}
-
 /** Despacha un evento verificado. Idempotente: el mismo evt_… no se procesa dos veces. */
 export async function handleStripeEvent(tx: Tx, event: Stripe.Event, gw: StripeGateway, today: string) {
   const fresh = await tx.insert(s.stripeEvents).values({ id: event.id, type: event.type, livemode: event.livemode }).onConflictDoNothing().returning({ id: s.stripeEvents.id });
@@ -404,11 +368,12 @@ export async function handleStripeEvent(tx: Tx, event: Stripe.Event, gw: StripeG
       return recordSubscriptionEnded(tx, event.data.object, today);
     case "charge.refunded":
       return recordRefund(tx, event.data.object, today);
+    // Payouts: no se registran aquí. Stripe puede depositar en Checking o en Savings; el depósito
+    // llega por la bandeja de Mercury y ahí se reconoce como "Payout de Stripe" en la cuenta real.
     case "payout.paid":
-      return recordPayout(tx, event.data.object);
     case "payout.failed":
     case "payout.canceled":
-      return reversePayout(tx, event.data.object);
+      return { kind: "ignored" as const };
     default:
       return { kind: "ignored" as const };
   }
@@ -454,16 +419,13 @@ export async function storeStripeBalance(tx: Tx, gw: StripeGateway, today: strin
 /** Importa el historial (facturas pagadas y payouts). Seguro de repetir: no duplica. */
 export async function importStripeHistory(tx: Tx, gw: StripeGateway, sinceUnix: number, today: string) {
   let invoices = 0;
-  let payouts = 0;
+  const payouts = 0;
   for await (const inv of gw.paidInvoices(sinceUnix)) {
     const r = await recordInvoicePaid(tx, inv, gw, today);
     if (r.kind !== "skip") invoices++;
   }
-  for await (const po of gw.payouts(sinceUnix)) {
-    if (po.status !== "paid") continue;
-    const r = await recordPayout(tx, po);
-    if (r.kind === "payout") payouts++;
-  }
+  // Los payouts se reconocen desde la bandeja de Mercury (cuenta real de destino), no desde aquí.
+  void gw.payouts;
   return { invoices, payouts };
 }
 

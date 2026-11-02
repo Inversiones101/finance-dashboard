@@ -174,9 +174,15 @@ describe("clasificar movimientos del banco", () => {
 });
 
 describe("conciliación", () => {
-  it("registra un ajuste por la diferencia con el banco", async () => {
+  it("una diferencia grande NO se tapa con un ajuste (casi siempre es un duplicado o algo sin registrar)", async () => {
     const r = await ledger.reconcile(db, { accountId: acc["Saldo Skool"], date: "2026-09-30", statementBalanceCents: 390000 });
-    expect(r.diff).toBe(390000 - 388571);
-    expect(await ledger.accountBalanceCents(db, acc["Saldo Skool"], "2026-09-30")).toBe(390000);
+    expect(r).toMatchObject({ diff: 390000 - 388571, adjusted: false });
+    expect(await ledger.accountBalanceCents(db, acc["Saldo Skool"], "2026-09-30")).toBe(388571);
+  });
+
+  it("una diferencia menor (redondeo, ≤ $5) sí se ajusta", async () => {
+    const r = await ledger.reconcile(db, { accountId: acc["Saldo Skool"], date: "2026-09-30", statementBalanceCents: 388671 });
+    expect(r).toMatchObject({ diff: 100, adjusted: true });
+    expect(await ledger.accountBalanceCents(db, acc["Saldo Skool"], "2026-09-30")).toBe(388671);
   });
 });

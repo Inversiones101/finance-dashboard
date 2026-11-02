@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import * as s from "@/db/schema";
-import { deleteDebtPayment, findOrCreateCounterparty, payContractInstallment, recordDebtPayment } from "@/lib/services/ledger";
+import { assertNotAlreadyFromBank, deleteDebtPayment, findOrCreateCounterparty, payContractInstallment, recordDebtPayment } from "@/lib/services/ledger";
 import { checkbox, mutate } from "./mutate";
 import { fail, parseForm, zCurrency, zDate, zId, zInt, zMoney, zOptDate, zOptId, zOptMoney, zOptText, zText, type ActionResult } from "./result";
 
@@ -74,6 +74,7 @@ export async function payDebtAction(_: ActionResult | null, form: FormData): Pro
   const { debtId, ...pay } = p.data;
   if (pay.principalCents + pay.interestCents + pay.feeCents === 0) return fail("El pago no puede ser cero.");
   return mutate("debts", "write", "debt_payments", "create", async (tx, userId) => {
+    await assertNotAlreadyFromBank(tx, pay.accountId, -(pay.principalCents + pay.interestCents + pay.feeCents), pay.date);
     const id = await recordDebtPayment(tx, debtId, { ...pay, userId });
     return { id, message: "Pago registrado" };
   });
@@ -136,6 +137,7 @@ export async function payInstallmentAction(_: ActionResult | null, form: FormDat
   const { contractId, ...pay } = p.data;
   if (pay.amountCents === 0) return fail("El monto no puede ser cero.");
   return mutate("debts", "write", "vendor_contracts", "installment", async (tx, userId) => {
+    await assertNotAlreadyFromBank(tx, pay.accountId, -pay.amountCents, pay.date);
     const id = await payContractInstallment(tx, contractId, { ...pay, userId });
     return { id, message: "Cuota registrada como gasto" };
   });

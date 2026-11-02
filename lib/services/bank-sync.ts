@@ -164,7 +164,8 @@ export async function refreshSuggestions(tx: Tx) {
     }
 
     // d) Conocidos.
-    if (!sug && item.amountCents > 0 && text.includes("skool")) sug = { as: "payout", label: "Parece un payout de Skool" };
+    if (!sug && item.amountCents > 0 && text.includes("skool")) sug = { as: "payout", label: "Payout de Skool" };
+    if (!sug && item.amountCents > 0 && text.includes("stripe")) sug = { as: "payout", label: "Payout de Stripe" };
     if (!sug && item.amountCents > 0 && /cashback|interest|interes/.test(text)) sug = { as: "other_income", label: "Cashback o intereses" };
 
     await tx.update(s.bankInbox).set({ suggestion: sug, updatedAt: new Date() }).where(eq(s.bankInbox.id, item.id));
@@ -242,16 +243,42 @@ export async function resolveInboxItem(tx: Tx, id: string, r: Resolution, userId
 
   if (r.as === "payout") {
     if (i.amountCents <= 0) throw new Error("Un payout es dinero que entra.");
-    const [skool] = await tx
+    // ¿De qué plataforma viene? Stripe si el banco lo dice; si no, Skool.
+    const fromStripe = /stripe/i.test(`${i.counterparty ?? ""} ${i.description ?? ""}`);
+    const [platform] = await tx
       .select()
       .from(s.financialAccounts)
-      .where(and(eq(s.financialAccounts.type, "processor"), eq(s.financialAccounts.owner, "llc"), sql`lower(${s.financialAccounts.name}) like '%skool%'`));
-    if (!skool) throw new Error("No encontré la cuenta \"Saldo Skool\".");
-    const group = await payout(tx, { platformId: skool.id, toAccountId: i.accountId, date: i.postedOn, amountCents: i.amountCents, userId });
+      .where(
+        and(
+          eq(s.financialAccounts.type, "processor"),
+          eq(s.financialAccounts.owner, "llc"),
+          fromStripe ? sql`lower(coalesce(${s.financialAccounts.institution}, '')) = 'stripe'` : sql`lower(${s.financialAccounts.name}) like '%skool%'`
+        )
+      );
+    if (!platform) throw new Error(`No encontré la cuenta "${fromStripe ? "Saldo Stripe" : "Saldo Skool"}".`);
+    const group = await payout(tx, { platformId: platform.id, toAccountId: i.accountId, date: i.postedOn, amountCents: i.amountCents, userId });
     const m = await movementByGroup(tx, group!, i.accountId);
     await tx.update(s.cashMovements).set({ externalId: i.externalId }).where(eq(s.cashMovements.id, m.id));
     await done(tx, i.id, m.id, userId);
   } else {
+    // ¿Ya está registrado a mano (mismo monto y cuenta, fechas cercanas)? Entonces no es algo nuevo.
+    const [twin] = await tx
+      .select({ id: s.cashMovements.id, date: s.cashMovements.movementDate, description: s.cashMovements.description })
+      .from(s.cashMovements)
+      .where(
+        and(
+          eq(s.cashMovements.accountId, i.accountId),
+          eq(s.cashMovements.amountCents, i.amountCents),
+          isNull(s.cashMovements.externalId),
+          sql`abs(${s.cashMovements.movementDate} - ${i.postedOn}::date) <= 4`
+        )
+      )
+      .limit(1);
+    if (twin) {
+      throw new Error(
+        `Esto ya está registrado: "${twin.description ?? "movimiento"}" del ${twin.date} por el mismo monto. Elige "Ya está registrado (solo enlazar)" para no duplicarlo.`
+      );
+    }
     const [a] = await tx.select().from(s.financialAccounts).where(eq(s.financialAccounts.id, i.accountId));
     const [row] = await tx
       .insert(s.cashMovements)

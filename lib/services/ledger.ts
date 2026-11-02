@@ -646,8 +646,13 @@ export async function accountBalanceCents(tx: Tx, accountId: string, upTo: strin
 }
 
 /** Compara el saldo del banco con el del sistema y, si difieren, registra un ajuste. */
+/** Diferencias de hasta $5 (redondeos, centavos de comisión) se ajustan; más que eso es un error a corregir. */
+export const RECONCILE_TOLERANCE_CENTS = 500;
+
 export async function reconcile(tx: Tx, r: { accountId: string; date: string; statementBalanceCents: number; userId?: string | null }) {
   const computed = await accountBalanceCents(tx, r.accountId, r.date);
+  const gap = r.statementBalanceCents - computed;
+  const ok = Math.abs(gap) <= RECONCILE_TOLERANCE_CENTS;
   const [statement] = await tx
     .insert(s.accountStatements)
     .values({
@@ -655,16 +660,19 @@ export async function reconcile(tx: Tx, r: { accountId: string; date: string; st
       statementDate: r.date,
       closingBalanceCents: r.statementBalanceCents,
       computedBalanceCents: computed,
-      reconciledAt: new Date(),
-      reconciledBy: r.userId ?? null,
+      reconciledAt: ok ? new Date() : null,
+      reconciledBy: ok ? (r.userId ?? null) : null,
     })
     .onConflictDoUpdate({
       target: [s.accountStatements.accountId, s.accountStatements.statementDate],
-      set: { closingBalanceCents: r.statementBalanceCents, computedBalanceCents: computed, reconciledAt: new Date(), reconciledBy: r.userId ?? null },
+      set: { closingBalanceCents: r.statementBalanceCents, computedBalanceCents: computed, reconciledAt: ok ? new Date() : null, reconciledBy: ok ? (r.userId ?? null) : null },
     })
     .returning();
 
-  const diff = r.statementBalanceCents - computed;
+  const diff = gap;
+  // Una diferencia grande casi siempre es un duplicado o algo sin registrar: no se tapa con un
+  // ajuste (que además ensuciaría el estado de resultados). Queda visible hasta corregirla.
+  if (!ok) return { computed, diff, adjusted: false };
   if (diff !== 0) {
     await tx.insert(s.cashMovements).values({
       accountId: r.accountId,
@@ -681,7 +689,39 @@ export async function reconcile(tx: Tx, r: { accountId: string; date: string; st
     .update(s.cashMovements)
     .set({ reconciled: true, statementId: statement.id })
     .where(and(eq(s.cashMovements.accountId, r.accountId), lte(s.cashMovements.movementDate, r.date), eq(s.cashMovements.reconciled, false)));
-  return { computed, diff };
+  return { computed, diff, adjusted: diff !== 0 };
+}
+
+// ── Protección contra duplicados ────────────────────────────────────────────
+
+/**
+ * Antes de registrar a mano un pago o un depósito en un banco: si ese mismo monto ya entró
+ * desde el banco (Mercury) en la misma cuenta y en fechas cercanas, no se registra otra vez.
+ * El banco es la fuente de verdad; lo que trae ya está en los libros.
+ */
+export async function assertNotAlreadyFromBank(tx: Tx, accountId: string | null | undefined, signedCents: number, date: string) {
+  if (!accountId || !signedCents) return;
+  const a = await account(tx, accountId);
+  if (a.type !== "checking" && a.type !== "savings") return;
+  const [dup] = await tx
+    .select({ date: s.cashMovements.movementDate, description: s.cashMovements.description })
+    .from(s.cashMovements)
+    .where(
+      and(
+        eq(s.cashMovements.accountId, accountId),
+        eq(s.cashMovements.amountCents, signedCents),
+        sql`${s.cashMovements.externalId} is not null`,
+        sql`abs(${s.cashMovements.movementDate} - ${date}::date) <= 5`
+      )
+    )
+    .limit(1);
+  if (dup) {
+    const usd = (Math.abs(signedCents) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+    throw new Error(
+      `Ese ${signedCents < 0 ? "pago" : "depósito"} de ${usd} ya entró desde el banco el ${dup.date} ("${dup.description ?? "movimiento"}") en ${a.name}. ` +
+        `Si es el mismo, no lo registres de nuevo: así se duplica. Si es otro distinto por el mismo monto, cámbiale la fecha o regístralo desde la bandeja.`
+    );
+  }
 }
 
 // ── Impuestos ───────────────────────────────────────────────────────────────
