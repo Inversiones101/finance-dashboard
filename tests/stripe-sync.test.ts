@@ -4,7 +4,7 @@ import type Stripe from "stripe";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import * as s from "@/db/schema";
 import { seed } from "@/db/seed";
 import { loadFinanceData } from "@/lib/data/finance-data";
