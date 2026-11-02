@@ -127,6 +127,13 @@
       "when": 1793636377313,
       "tag": "0017_gaap_contra_ventas",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793636916803,
+      "tag": "0018_periodo_servicio_contratos",
+      "breakpoints": true
     }
   ]
 }

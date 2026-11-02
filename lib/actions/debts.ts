@@ -110,6 +110,8 @@ const contractSchema = z.object({
   signedOn: zDate,
   installmentDay: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.coerce.number().int().min(1).max(31).nullable()),
   installmentAmountCents: zOptMoney,
+  serviceStart: zOptDate,
+  serviceEnd: zOptDate,
   status: z.enum(["active", "completed", "canceled"]),
   notes: zOptText,
 });

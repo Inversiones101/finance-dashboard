@@ -48,3 +48,22 @@ describe("puesta en marcha", () => {
     await expect(recordStartupCost(db, { date: "2026-09-20", description: "x", amountCents: 100, currency: "USD", categoryId: null, contractId: contract.id })).rejects.toThrow(/gasto normal/);
   });
 });
+
+describe("contrato con periodo de servicio (US GAAP)", () => {
+  it("reparte el costo por día entre puesta en marcha y operación, y el balance cuadra", async () => {
+    await db.update(s.vendorContracts).set({ totalCents: 773_000, serviceStart: "2026-08-14", serviceEnd: "2026-12-14" }).where(eq(s.vendorContracts.id, contract.id));
+    const data = await loadFinanceData(db);
+    const ct = data.contracts.find((c) => c.id === contract.id)!;
+    const { contractRecognition } = await import("@/lib/finance/engine");
+    const parts = contractRecognition(ct, "2026-09-20");
+    expect(parts.reduce((a, p) => a + p.cents, 0)).toBe(773_000);
+    expect(parts.reduce((a, p) => a + p.days, 0)).toBe(123);
+    expect(parts.filter((p) => p.preOperating).reduce((a, p) => a + p.days, 0)).toBe(37); // 14 ago – 19 sep
+
+    const pnl = computePnlReport(data, { from: "2026-08", to: "2026-12", granularity: "month" }).total;
+    expect(Math.round((pnl.preOperating + pnl.opex + pnl.cogs) * 100)).toBeGreaterThanOrEqual(773_000);
+    for (const asOf of ["2026-08-31", "2026-09-30", "2026-10-31", "2026-12-31"]) {
+      expect(computeBalanceSheet(data, { asOf, hnlPerUsd: 25 }).difference).toBeCloseTo(0, 2);
+    }
+  });
+});

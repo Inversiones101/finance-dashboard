@@ -138,6 +138,7 @@ export async function buildAccountantPackage(tx: Tx, { from, to, hnlPerUsd, read
   for (const c of bs.assets.cash) bsWs.addRow({ k: `  Banco: ${c.name}`, v: c.amount });
   for (const p of bs.assets.platforms) bsWs.addRow({ k: `  Por cobrar en plataforma: ${p.name} (Platform receivable)`, v: p.amount });
   if (bs.assets.receivables) bsWs.addRow({ k: "  Cuentas por cobrar (Receivables)", v: bs.assets.receivables });
+  if (bs.assets.prepaidExpenses) bsWs.addRow({ k: "  Gastos pagados por adelantado (Prepaid expenses)", v: bs.assets.prepaidExpenses });
   bold("PASIVO (LIABILITIES)", bs.liabilities.total);
   for (const c of bs.liabilities.cards) bsWs.addRow({ k: `  Tarjeta: ${c.name} (Credit card)`, v: c.amount });
   if (bs.liabilities.payables) bsWs.addRow({ k: "  Cuentas por pagar (Payables)", v: bs.liabilities.payables });
@@ -145,6 +146,7 @@ export async function buildAccountantPackage(tx: Tx, { from, to, hnlPerUsd, read
   if (bs.liabilities.ownerLoans) bsWs.addRow({ k: "  Préstamos del dueño (Owner loans)", v: bs.liabilities.ownerLoans });
   if (bs.liabilities.salesTaxPayable) bsWs.addRow({ k: "  Impuestos sobre ventas por remitir (Sales tax payable)", v: bs.liabilities.salesTaxPayable });
   if (bs.liabilities.deferredRevenue) bsWs.addRow({ k: "  Ingresos diferidos (Deferred revenue)", v: bs.liabilities.deferredRevenue });
+  if (bs.liabilities.accruedExpenses) bsWs.addRow({ k: "  Gastos devengados por pagar (Accrued expenses)", v: bs.liabilities.accruedExpenses });
   bold("CAPITAL CONTABLE (EQUITY)", bs.equity.total);
   bsWs.addRow({ k: "  Capital contribuido (Contributed capital)", v: bs.equity.capital });
   bsWs.addRow({ k: "  Retiros (Draws)", v: -bs.equity.draws });

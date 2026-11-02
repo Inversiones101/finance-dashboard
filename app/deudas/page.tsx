@@ -42,6 +42,10 @@ function ContractFields({ o, d, today }: { o: FormOptions; d?: Contract; today: 
         <SelectField label="Categoría del gasto" name="categoryId" options={o.expenseCategories} defaultValue={d?.categoryId} placeholder="Elige…" required />
         <TextField label="Fecha de firma" name="signedOn" type="date" defaultValue={d?.signedOn ?? today} required />
       </FieldRow>
+      <FieldRow>
+        <TextField label="Servicio desde" name="serviceStart" type="date" defaultValue={d?.serviceStart} hint="Si es un servicio que recibes en un periodo (mentoría, programa)." />
+        <TextField label="Servicio hasta (incluido)" name="serviceEnd" type="date" defaultValue={d?.serviceEnd} hint="El costo se reparte día a día en este periodo (US GAAP), sin importar cuándo pagues." />
+      </FieldRow>
       <SelectField label="Estado" name="status" options={toOptions(CONTRACT_STATUS)} defaultValue={d?.status ?? "active"} />
       <TextareaField label="Notas" name="notes" defaultValue={d?.notes} />
     </>

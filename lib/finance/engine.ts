@@ -87,6 +87,9 @@ export type FinanceData = {
     installmentDay: number | null;
     installmentAmountCents: number | null;
     status: "active" | "completed" | "canceled";
+    categoryId?: string;
+    serviceStart?: string | null;
+    serviceEnd?: string | null; // incluido
   }[];
   subscriptions: {
     name: string;
@@ -260,8 +263,45 @@ function addMonthsIso(iso: string, n: number) {
   return t.toISOString().slice(0, 10);
 }
 
+/**
+ * Servicio contratado con periodo (ej. una mentoría del 14 ago al 14 dic): su costo total se
+ * reconoce día a día dentro del periodo (US GAAP), partido por mes y por antes/después del inicio
+ * de operaciones (lo de antes es puesta en marcha). Cada parte lleva la fecha de su primer día.
+ */
+export function contractRecognition(ct: FinanceData["contracts"][number], operationsStart: string | null | undefined) {
+  if (!ct.serviceStart || !ct.serviceEnd || ct.serviceEnd < ct.serviceStart || ct.status === "canceled") return [];
+  const day = 86_400_000;
+  const toMs = (d: string) => Date.parse(`${d}T00:00:00Z`);
+  const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const startMs = toMs(ct.serviceStart);
+  const endMs = toMs(ct.serviceEnd) + day; // exclusivo
+  const totalDays = Math.round((endMs - startMs) / day);
+  const total = ct.totalCents; // contratos en USD
+  // Cortes: inicio, cada día 1 de mes, inicio de operaciones, fin.
+  const cuts = new Set<number>([startMs, endMs]);
+  for (let m = monthOf(ct.serviceStart); `${m}-01` < iso(endMs); m = addMonths(m, 1)) {
+    const ms = toMs(`${m}-01`);
+    if (ms > startMs && ms < endMs) cuts.add(ms);
+  }
+  if (operationsStart) {
+    const ops = toMs(operationsStart);
+    if (ops > startMs && ops < endMs) cuts.add(ops);
+  }
+  const points = [...cuts].sort((a, b) => a - b);
+  const parts = points.slice(0, -1).map((from, i) => {
+    const days = Math.round((points[i + 1] - from) / day);
+    const date = iso(from);
+    return { date, days, preOperating: !!operationsStart && date < operationsStart, cents: Math.round((total * days) / totalDays) };
+  });
+  const drift = total - parts.reduce((a, p) => a + p.cents, 0);
+  if (parts.length) parts[parts.length - 1].cents += drift;
+  return parts;
+}
+
 function makePnl(data: FinanceData) {
   const accrual = data.basis !== "cash";
+  // En base devengada, los contratos con periodo de servicio se reconocen en el periodo, no al pagar.
+  const periodContracts = new Map(accrual ? data.contracts.filter((ct) => contractRecognition(ct, data.operationsStart).length).map((ct) => [ct.id, ct]) : []);
   const cat = new Map(data.categories.map((c) => [c.id, c]));
   const productName = new Map(data.products.map((p) => [p.id, p.name]));
   const accountById = new Map(data.accounts.map((a) => [a.id, a]));
@@ -303,7 +343,25 @@ function makePnl(data: FinanceData) {
         add(d.revenueByProduct, product, part.cents);
       }
     }
+    for (const ct of periodContracts.values()) {
+      const c = ct.categoryId ? cat.get(ct.categoryId) : undefined;
+      const name = c?.name ?? ct.name;
+      for (const part of contractRecognition(ct, data.operationsStart)) {
+        if (!inPeriod(part.date)) continue;
+        if (part.preOperating) {
+          preOperating += part.cents;
+          add(d.preOperatingByCategory, name, part.cents);
+        } else if (c?.kind === "cogs") {
+          cogs += part.cents;
+          add(d.cogsByCategory, name, part.cents);
+        } else {
+          opex += part.cents;
+          add(d.opexByCategory, name, part.cents);
+        }
+      }
+    }
     for (const e of expenses) {
+      if (e.contractId && periodContracts.has(e.contractId)) continue; // se reconoce arriba, por periodo
       if (!inPeriod(e.date)) continue;
       const v = usd(e.amountCents, e.fxRateToUsd);
       const c = cat.get(e.categoryId);
@@ -1305,6 +1363,20 @@ export function computeBalanceSheet(data: FinanceData, { asOf, hnlPerUsd }: { as
   const ownerLoans = ownerSum("loan") - ownerSum("reimbursement");
   // Impuesto sobre ventas cobrado a clientes (Stripe): es dinero de la autoridad fiscal, no de la LLC.
   const salesTaxPayable = sum(data.movements.filter((m) => m.type === "sales_tax_collected" && m.date <= asOf).map((m) => usd(m.amountCents, m.fxRateToUsd)));
+  // Servicios contratados con periodo: pagado de más = gasto pagado por adelantado (activo);
+  // recibido sin pagar = gasto devengado por pagar (pasivo).
+  let prepaidExpenses = 0;
+  let accruedExpenses = 0;
+  if (data.basis !== "cash") {
+    for (const ct of data.contracts) {
+      const parts = contractRecognition(ct, data.operationsStart);
+      if (!parts.length) continue;
+      const recognized = sum(parts.filter((p) => p.date <= asOf).map((p) => p.cents));
+      const settled = sum(data.expenses.filter((e) => e.contractId === ct.id && e.status !== "void" && e.date <= asOf).map((e) => usd(e.amountCents, e.fxRateToUsd)));
+      if (settled > recognized) prepaidExpenses += settled - recognized;
+      else accruedExpenses += recognized - settled;
+    }
+  }
   // Ingresos diferidos: lo cobrado por servicio que todavía no se ha dado (se reconoce mes a mes).
   const deferredRevenue =
     data.basis === "cash"
@@ -1324,8 +1396,8 @@ export function computeBalanceSheet(data: FinanceData, { asOf, hnlPerUsd }: { as
   const capital = ownerSum("contribution");
   const draws = ownerSum("draw");
 
-  const totalAssets = sum(cash.map((c) => c.amount)) + sum(platforms.map((p) => p.amount)) + receivables;
-  const totalLiabilities = sum(cards.map((c) => c.amount)) + payables + sum(debts.map((d) => d.amount)) + ownerLoans + salesTaxPayable + deferredRevenue;
+  const totalAssets = sum(cash.map((c) => c.amount)) + sum(platforms.map((p) => p.amount)) + receivables + prepaidExpenses;
+  const totalLiabilities = sum(cards.map((c) => c.amount)) + payables + sum(debts.map((d) => d.amount)) + ownerLoans + salesTaxPayable + deferredRevenue + accruedExpenses;
   const totalEquity = capital - draws + retained + openingBalances;
 
   const list = (xs: { name: string; amount: number }[]) => xs.map((x) => ({ name: x.name, amount: toDollars(x.amount) }));
@@ -1335,6 +1407,7 @@ export function computeBalanceSheet(data: FinanceData, { asOf, hnlPerUsd }: { as
       cash: list(cash),
       platforms: list(platforms),
       receivables: toDollars(receivables),
+      prepaidExpenses: toDollars(prepaidExpenses),
       total: toDollars(totalAssets),
     },
     liabilities: {
@@ -1344,6 +1417,7 @@ export function computeBalanceSheet(data: FinanceData, { asOf, hnlPerUsd }: { as
       ownerLoans: toDollars(ownerLoans),
       salesTaxPayable: toDollars(salesTaxPayable),
       deferredRevenue: toDollars(deferredRevenue),
+      accruedExpenses: toDollars(accruedExpenses),
       total: toDollars(totalLiabilities),
     },
     equity: {

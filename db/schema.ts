@@ -561,6 +561,13 @@ export const vendorContracts = pgTable("vendor_contracts", {
   installmentDay: integer("installment_day"),
   installmentAmountCents: cents("installment_amount_cents"),
   defaultFundingSource: fundingSourceEnum("default_funding_source").notNull().default("owner_personal"),
+  /**
+   * Periodo en que recibes el servicio (ej. una mentoría del 14 ago al 14 dic). Si se define, el
+   * costo se reconoce día a día en ese periodo (US GAAP), sin importar cuándo pagas las cuotas;
+   * lo pagado de más es gasto pagado por adelantado y lo recibido sin pagar, gasto por pagar.
+   */
+  serviceStart: date("service_start"),
+  serviceEnd: date("service_end"), // último día del servicio (incluido)
   status: contractStatusEnum("status").notNull().default("active"),
   notes: text("notes"),
   ...timestamps,

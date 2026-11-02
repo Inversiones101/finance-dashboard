@@ -327,6 +327,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                     <Line key={c.name} label={`${c.name} (pendiente de payout)`} value={c.amount} money={money} indent />
                   ))}
                   <Line label="Cobros sin depositar" value={b.assets.receivables} money={money} indent />
+                  {b.assets.prepaidExpenses !== 0 && <Line label="Gastos pagados por adelantado (servicio por recibir)" value={b.assets.prepaidExpenses} money={money} indent />}
                   <Line label={`Total ${TERMS.assets.toLowerCase()}`} value={b.assets.total} money={money} strong />
                 </Panel>
                 <div className="flex flex-col gap-4">
@@ -341,6 +342,7 @@ export default async function ReportesPage({ searchParams }: PageProps<"/reporte
                     {b.liabilities.ownerLoans !== 0 && <Line label="Préstamos de socios" value={b.liabilities.ownerLoans} money={money} indent />}
                     {b.liabilities.salesTaxPayable !== 0 && <Line label="Impuestos sobre ventas por remitir" value={b.liabilities.salesTaxPayable} money={money} indent />}
                     {b.liabilities.deferredRevenue !== 0 && <Line label="Ingresos diferidos (servicio cobrado por dar)" value={b.liabilities.deferredRevenue} money={money} indent />}
+                    {b.liabilities.accruedExpenses !== 0 && <Line label="Gastos devengados por pagar (servicio recibido sin pagar)" value={b.liabilities.accruedExpenses} money={money} indent />}
                     <Line label={`Total ${TERMS.liabilities.toLowerCase()}`} value={b.liabilities.total} money={money} strong />
                   </Panel>
                   <Panel title={TERMS.equity}>

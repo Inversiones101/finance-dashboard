@@ -107,6 +107,9 @@ export async function loadFinanceData(db: AnyDb): Promise<FinanceData> {
       installmentDay: c.installmentDay,
       installmentAmountCents: c.installmentAmountCents,
       status: c.status,
+      categoryId: c.categoryId,
+      serviceStart: c.serviceStart,
+      serviceEnd: c.serviceEnd,
     })),
     subscriptions: subscriptions.map((sub) => ({
       name: sub.name,
